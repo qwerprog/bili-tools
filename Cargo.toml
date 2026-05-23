@@ -1,5 +1,5 @@
 [package]
-name = "bili-tools"
+name = "bili_live"
 version = "0.1.1"
 edition = "2024"
 
@@ -24,11 +24,9 @@ qrcode = "0.14.1"
 # ] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149", default-features = false, features = [
-  "alloc",
+    "alloc",
 ] }
-minreq = { version = "2.14.1", default-features = false, features = [
-  "https-native",
-] }
+minreq = { version = "2.14.1", default-features = false, features = ["https-rustls"] }
 thiserror = { version = "2.0.18", default-features = false }
 log = { version = "0.4.29", default-features = false }
 env_logger = { version = "0.11.10", default-features = false }
