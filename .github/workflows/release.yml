@@ -87,8 +87,9 @@ jobs:
           VERSION="${{ needs.build.outputs.version }}"
           SHA256="${{ needs.build.outputs.sha256 }}"
           SRC="pkg/winget-pkgs/manifests/q/QwerProg/bt/0.1.0"
-          DST="pkg/winget-pkgs/manifests/q/QwerProg/bt/${VERSION}"
-          cp -r "$SRC" "$DST"
+          DST="/tmp/winget-manifests/q/QwerProg/bt/${VERSION}"
+          mkdir -p "$DST"
+          cp "$SRC"/* "$DST/"
           sed -i "s/0\.1\.0/${VERSION}/g; s/0000000000000000000000000000000000000000000000000000000000000000/${SHA256}/g" "$DST"/*.yaml
 
       - name: Submit PR to winget-pkgs
@@ -96,7 +97,7 @@ jobs:
           GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
           git clone --depth=1 "https://x-access-token:${GH_TOKEN}@github.com/QwerProg/winget-pkgs.git" winget-pkgs-repo
-          cp -r pkg/winget-pkgs/manifests/* winget-pkgs-repo/manifests/
+          cp -r /tmp/winget-manifests/* winget-pkgs-repo/manifests/
           cd winget-pkgs-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
