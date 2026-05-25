@@ -86,7 +86,7 @@ jobs:
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           SHA256="${{ needs.build.outputs.sha256 }}"
-          SRC="pkg/winget-pkgs/manifests/q/QwerProg/bt/0.1.0"
+          SRC="pkg/winget-pkgs/manifests/q/QwerProg/bt/0.1.1"
           DST="/tmp/winget-manifests/q/QwerProg/bt/${VERSION}"
           mkdir -p "$DST"
           cp "$SRC"/* "$DST/"
