@@ -86,11 +86,12 @@ jobs:
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           SHA256="${{ needs.build.outputs.sha256 }}"
-          SRC="pkg/winget-pkgs/manifests/q/QwerProg/bt/0.1.1"
+          TEMPLATE_VERSION="$(find pkg/winget-pkgs/manifests/q/QwerProg/bt -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n1)"
+          SRC="pkg/winget-pkgs/manifests/q/QwerProg/bt/${TEMPLATE_VERSION}"
           DST="/tmp/winget-manifests/q/QwerProg/bt/${VERSION}"
           mkdir -p "$DST"
           cp "$SRC"/* "$DST/"
-          sed -i "s/0\.1\.0/${VERSION}/g; s/0000000000000000000000000000000000000000000000000000000000000000/${SHA256}/g" "$DST"/*.yaml
+          sed -i "s/${TEMPLATE_VERSION}/${VERSION}/g; s/0000000000000000000000000000000000000000000000000000000000000000/${SHA256}/g" "$DST"/*.yaml
 
       - name: Submit PR to winget-pkgs
         env:
