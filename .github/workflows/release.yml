@@ -87,7 +87,7 @@ jobs:
           VERSION="${{ needs.build.outputs.version }}"
           SHA256="${{ needs.build.outputs.sha256 }}"
           TEMPLATE_VERSION="$(find pkg/winget-pkgs/manifests/q/QwerProg/bt -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort -V | tail -n1)"
-          [ -n "$TEMPLATE_VERSION" ]
+          [ -n "$TEMPLATE_VERSION" ] || { echo "Error: no winget template version found in pkg/winget-pkgs/manifests/q/QwerProg/bt"; exit 1; }
           SRC="pkg/winget-pkgs/manifests/q/QwerProg/bt/${TEMPLATE_VERSION}"
           DST="/tmp/winget-manifests/q/QwerProg/bt/${VERSION}"
           mkdir -p "$DST"
