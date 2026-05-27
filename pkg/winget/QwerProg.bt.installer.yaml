@@ -1,5 +1,5 @@
 PackageIdentifier: QwerProg.bt
-PackageVersion: 0.1.1
+PackageVersion: 0.1.2
 PackageLocale: en-US
 PackageName: bt
 Publisher: QwerProg
@@ -11,7 +11,7 @@ Tags:
   - stream
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/QwerProg/bili-tools/releases/download/v0.1.1/bt-x86_64-windows.zip
+    InstallerUrl: https://github.com/QwerProg/bili-tools/releases/download/v0.1.2/bt-x86_64-windows.zip
     InstallerType: zip
     NestedInstallerType: portable
     NestedInstallerFiles:
