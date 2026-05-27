@@ -1,49 +1,31 @@
 #[macro_export]
 macro_rules! user_info {
-    ($($arg:tt)*) => {
-        log::info!($($arg)*)
-    };
+    ($($arg:tt)*) => {{
+        use crossterm::style::Stylize;
+        println!("{} {}", "·".dark_grey(), format!($($arg)*))
+    }};
 }
 
 #[macro_export]
 macro_rules! user_success {
-    ($($arg:tt)*) => {
-        log::info!("✅ {}", format!($($arg)*))
-    };
+    ($($arg:tt)*) => {{
+        use crossterm::style::Stylize;
+        println!("{}", format!("✅ {}", format!($($arg)*)).green())
+    }};
 }
 
 #[macro_export]
 macro_rules! user_warning {
-    ($($arg:tt)*) => {
-        log::warn!("⚠️ {}", format!($($arg)*))
-    };
+    ($($arg:tt)*) => {{
+        use crossterm::style::Stylize;
+        println!("{}", format!("⚠️  {}", format!($($arg)*)).yellow())
+    }};
 }
 
 #[macro_export]
 macro_rules! user_error {
-    ($($arg:tt)*) => {
-        log::error!("❌ {}", format!($($arg)*))
-    };
-}
-
-#[macro_export]
-macro_rules! user_prompt {
-    ($($arg:tt)*) => {
-        {
-            use std::io::Write;
-            print!("📺 {}", format!($($arg)*));
-            std::io::stdout().flush().unwrap();
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! user_input_prompt {
-    ($($arg:tt)*) => {
-        {
-            use std::io::Write;
-            print!("🎯 {}", format!($($arg)*));
-            std::io::stdout().flush().unwrap();
-        }
-    };
-}
+    ($($arg:tt)*) => {{
+        use crossterm::style::Stylize;
+        eprintln!("{}", format!("❌ {}", format!($($arg)*)).red())
+        }};
+    }

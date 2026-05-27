@@ -1,7 +1,8 @@
 use crate::api::client::DEFAULT_USER_AGENT;
 use crate::auth::cookies::read_cookies;
 use crate::error::{BiliLiveError, Result};
-use crate::user_info;
+use crossterm::style::Stylize;
+use unicode_width::UnicodeWidthStr;
 
 pub fn get_live_info(live_id: u64) -> Result<()> {
     let cookies = read_cookies()?;
@@ -27,17 +28,27 @@ pub fn get_live_info(live_id: u64) -> Result<()> {
     }
 
     let data = &res["data"];
-    user_info!("直播统计信息:");
-    user_info!("新增粉丝 : {}", data["AddFans"].as_i64().unwrap_or(0));
-    user_info!("弹幕数 : {}", data["DanmuNum"].as_i64().unwrap_or(0));
-    user_info!("金仓鼠流水 : {}", data["HamsterRmb"].as_i64().unwrap_or(0));
-    user_info!("直播时长 : {}", data["LiveTime"].as_i64().unwrap_or(0));
-    user_info!("最大在线 : {}", data["MaxOnline"].as_i64().unwrap_or(0));
-    user_info!(
-        "新增粉丝勋章 : {}",
-        data["NewFansClub"].as_i64().unwrap_or(0)
-    );
-    user_info!("累计观看 : {}", data["WatchedCount"].as_i64().unwrap_or(0));
+
+    println!("  {:>6}", "统计".dark_grey());
+
+    let stats: &[(&str, i64)] = &[
+        ("新增粉丝", data["AddFans"].as_i64().unwrap_or(0)),
+        ("弹幕数量", data["DanmuNum"].as_i64().unwrap_or(0)),
+        ("直播时长", data["LiveTime"].as_i64().unwrap_or(0)),
+        ("最大在线", data["MaxOnline"].as_i64().unwrap_or(0)),
+        ("累计观看", data["WatchedCount"].as_i64().unwrap_or(0)),
+        ("粉丝勋章", data["NewFansClub"].as_i64().unwrap_or(0)),
+        ("金仓鼠", data["HamsterRmb"].as_i64().unwrap_or(0)),
+    ];
+    let max_width = stats
+        .iter()
+        .map(|(k, _)| UnicodeWidthStr::width(*k))
+        .max()
+        .unwrap_or(8);
+    for (key, val) in stats {
+        let pad = max_width - UnicodeWidthStr::width(*key);
+        println!("  {}{}  {}", key.dark_grey(), " ".repeat(pad), val);
+    }
 
     Ok(())
 }

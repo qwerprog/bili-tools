@@ -17,7 +17,7 @@ pub fn init_logger() {
         writeln!(buf, "{} {}", level_emoji, record.args())
     });
 
-    builder.filter(None, LevelFilter::Info);
+    builder.filter(None, LevelFilter::Warn);
 
     builder.target(Target::Stdout);
 

@@ -3,7 +3,6 @@ use crate::auth::cookies::{read_cookies, update_live_key};
 use crate::error::{BiliLiveError, Result};
 use crate::live::stats::get_live_info;
 use crate::utils::string::mask_rtmp_code;
-use crate::user_success;
 use std::fs;
 use std::io::Write;
 
@@ -43,24 +42,34 @@ pub fn start_live(area_id: &str, show_full_code: bool) -> Result<()> {
         .as_str()
         .ok_or_else(|| BiliLiveError::Parse("缺少live_key".to_string()))?;
 
-    update_live_key(live_key.parse::<u64>().map_err(|e| {
-        BiliLiveError::Parse(format!("live_key转换失败: {}", e))
-    })?)?;
+    update_live_key(
+        live_key
+            .parse::<u64>()
+            .map_err(|e| BiliLiveError::Parse(format!("live_key转换失败: {}", e)))?,
+    )?;
 
-    user_success!("RTMP地址: {}", rtmp_addr);
-
+    use crossterm::style::Stylize;
+    println!();
+    println!("{}", "🎬 直播已开启".green());
+    println!("  {:>8}  {}", "推流地址".dark_grey(), rtmp_addr);
     if show_full_code {
-        user_success!("推流码: {}", rtmp_code);
+        println!("  {:>8}  {}", "推流码".dark_grey(), rtmp_code);
     } else {
-        user_success!("推流码: {}", mask_rtmp_code(rtmp_code));
+        println!(
+            "  {:>8}  {}",
+            "推流码".dark_grey(),
+            mask_rtmp_code(rtmp_code)
+        );
     }
 
     let mut file = fs::File::create("stream_info.txt")?;
     writeln!(file, "{}", rtmp_addr)?;
     writeln!(file, "{}", rtmp_code)?;
-    user_success!("推流信息已写入 stream_info.txt");
-
-    user_success!("直播已开启，程序退出");
+    println!(
+        "  {:>8}  {}",
+        "·".dark_grey(),
+        "推流信息已写入 stream_info.txt".dark_grey()
+    );
 
     Ok(())
 }
@@ -90,7 +99,8 @@ pub fn stop_live() -> Result<()> {
         )));
     }
 
-    user_success!("成功关闭直播");
+    use crossterm::style::Stylize;
+    println!("{}", "🎬 直播已关闭".green());
 
     if let Some(live_key) = cookies.live_key {
         get_live_info(live_key)?;

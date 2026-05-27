@@ -1,6 +1,6 @@
 [package]
-name = "bili_live"
-version = "0.1.1"
+name = "bili-tools"
+version = "0.1.2"
 edition = "2024"
 
 [[bin]]
@@ -34,3 +34,12 @@ chrono = { version = "0.4.44", features = ["serde"] }
 
 clap = { version = "4.6.0", features = ["derive"] }
 crossterm = "0.28"
+md5 = "0.7"
+base64 = "0.22"
+rand = "0.8"
+serde_urlencoded = "0.7"
+url = "2.5"
+rsa = { version = "0.9.8", features = ["pem"] }
+uuid = { version = "1", features = ["v4"] }
+dialoguer = "0.12"
+unicode-width = "0.2"

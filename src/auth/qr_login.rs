@@ -1,52 +1,147 @@
-use crate::api::passport::{generate_qr_code, poll_qr_status};
-use crate::auth::cookies::save_cookies;
-use crate::error::Result;
+use crate::api::passport::{
+    PollStatus, SmsSendStatus, generate_qr_code, login_by_password, login_by_sms, poll_qr_status,
+    send_sms_with_recaptcha,
+};
+use crate::auth::cookies::save_cookies_from_credentials;
+use crate::error::{BiliLiveError, Result};
 use crate::utils::qrcode::{generate_and_save_qrcode, print_qrcode_in_terminal};
 use crate::{user_info, user_success, user_warning};
-
-pub struct QRStatus {
-    pub waiting: i32,
-    pub scanned: i32,
-    pub success: i32,
-}
-
-pub const QR_STATUS: QRStatus = QRStatus {
-    waiting: 86101,
-    scanned: 86090,
-    success: 0,
-};
+use dialoguer::{Input, Password, Select, theme::ColorfulTheme};
 
 pub fn start_login() -> Result<()> {
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("选择一种登录方式")
+        .default(2)
+        .item("账号密码")
+        .item("短信登录")
+        .item("扫码登录")
+        .item("浏览器登录")
+        .interact()
+        .map_err(|e| crate::error::BiliLiveError::Input(format!("选择登录方式失败: {e}")))?;
+
+    match selection {
+        0 => login_by_password_flow(),
+        1 => login_by_sms_flow(),
+        2 => login_by_qrcode(),
+        3 => login_by_browser(),
+        _ => Ok(()),
+    }
+}
+
+fn login_by_password_flow() -> Result<()> {
+    let username: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("请输入账号")
+        .interact()
+        .map_err(|e| BiliLiveError::Input(format!("读取账号失败: {e}")))?;
+    let password: String = Password::with_theme(&ColorfulTheme::default())
+        .with_prompt("请输入密码")
+        .interact()
+        .map_err(|e| BiliLiveError::Input(format!("读取密码失败: {e}")))?;
+
+    let (sessdata, csrf_token) = login_by_password(&username, &password)?;
+    save_cookies_from_credentials(&sessdata, &csrf_token)?;
+    user_success!("登录成功！");
+    Ok(())
+}
+
+fn login_by_sms_flow() -> Result<()> {
+    let country_code: u32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("请输入手机国家代码")
+        .default(86)
+        .interact_text()
+        .map_err(|e| BiliLiveError::Input(format!("读取国家代码失败: {e}")))?;
+    let phone: u64 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("请输入手机号")
+        .interact_text()
+        .map_err(|e| BiliLiveError::Input(format!("读取手机号失败: {e}")))?;
+
+    let payload = match send_sms_with_recaptcha(phone, country_code, None, None, None)? {
+        SmsSendStatus::Ready { payload } => payload,
+        SmsSendStatus::NeedRecaptcha {
+            url,
+            recaptcha_token,
+        } => {
+            user_warning!("需要滑动验证码");
+            user_info!("请复制此链接至浏览器打开并完成滑动验证：{}", url);
+            user_info!("完成后在开发者工具 Network 中查看 get.php / ajax.php 响应");
+            let challenge: String = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("请输入 get.php 响应中的 challenge")
+                .interact_text()
+                .map_err(|e| BiliLiveError::Input(format!("读取 challenge 失败: {e}")))?;
+            let validate: String = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("请输入 ajax.php 响应中的 validate")
+                .interact_text()
+                .map_err(|e| BiliLiveError::Input(format!("读取 validate 失败: {e}")))?;
+
+            match send_sms_with_recaptcha(
+                phone,
+                country_code,
+                Some(&challenge),
+                Some(&validate),
+                Some(&recaptcha_token),
+            )? {
+                SmsSendStatus::Ready { payload } => payload,
+                SmsSendStatus::NeedRecaptcha { .. } => {
+                    return Err(BiliLiveError::Api("滑动验证失败，请重试".to_string()));
+                }
+            }
+        }
+    };
+
+    let code: u32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("请输入短信验证码")
+        .interact_text()
+        .map_err(|e| BiliLiveError::Input(format!("读取验证码失败: {e}")))?;
+
+    let (sessdata, csrf_token) = login_by_sms(code, payload)?;
+    save_cookies_from_credentials(&sessdata, &csrf_token)?;
+    user_success!("登录成功！");
+    Ok(())
+}
+
+fn login_by_qrcode() -> Result<()> {
     user_info!("开始B站二维码登录流程...");
 
     let qr_data = generate_qr_code()?;
-    user_info!("请使用B站手机客户端如下链接：{}", qr_data.url);
-
-    user_info!("或使用B站手机客户端扫描如下二维码");
+    user_info!("请使用B站手机客户端扫描如下二维码");
 
     print_qrcode_in_terminal(&qr_data.url)?;
 
     generate_and_save_qrcode(&qr_data.url, "qrcode.png")?;
     user_success!("二维码已保存到 qrcode.png");
-
     user_info!("等待用户处理...");
 
-    loop {
-        let poll_data = poll_qr_status(&qr_data.qrcode_key)?;
+    poll_until_success(&qr_data.auth_code)
+}
 
-        match poll_data.code {
-            code if code == QR_STATUS.waiting => {}
-            code if code == QR_STATUS.scanned => {
-                user_info!("已处理，请在手机上确认登录");
+fn login_by_browser() -> Result<()> {
+    user_info!("开始B站浏览器登录流程...");
+
+    let qr_data = generate_qr_code()?;
+    if !qr_data.url.starts_with("http") {
+        user_warning!("该链接为 App 协议，浏览器可能无法打开，建议使用扫码登录");
+    }
+    user_info!("请复制此链接至浏览器中完成登录：{}", qr_data.url);
+    user_info!("等待用户处理...");
+
+    poll_until_success(&qr_data.auth_code)
+}
+
+fn poll_until_success(auth_code: &str) -> Result<()> {
+    loop {
+        let status = poll_qr_status(auth_code)?;
+        match status {
+            PollStatus::Waiting => {}
+            PollStatus::Scanned => {
+                user_info!("已扫码，请在手机上确认登录");
             }
-            code if code == QR_STATUS.success => {
+            PollStatus::Success {
+                sessdata,
+                csrf_token,
+            } => {
                 user_success!("登录成功！");
-                save_cookies(&poll_data.url)?;
-                std::fs::remove_file("qrcode.png")?;
-                break;
-            }
-            _ => {
-                user_warning!("未知状态：{}", poll_data.message);
+                save_cookies_from_credentials(&sessdata, &csrf_token)?;
+                std::fs::remove_file("qrcode.png").ok();
                 break;
             }
         }
