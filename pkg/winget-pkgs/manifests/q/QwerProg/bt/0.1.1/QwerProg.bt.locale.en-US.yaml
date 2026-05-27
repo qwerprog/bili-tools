@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
 PackageIdentifier: QwerProg.bt
 PackageVersion: 0.1.1
 PackageLocale: en-US
@@ -5,7 +6,6 @@ Publisher: QwerProg
 PackageName: bt
 License: MIT
 ShortDescription: Bilibili live streaming CLI tool - one-command start/stop stream
-Homepage: https://github.com/QwerProg/bili-tools
 Tags:
   - bilibili
   - live
