@@ -7,7 +7,8 @@ B站直播开播工具，命令行一键开播/下播。
 ### Arch Linux (AUR)
 
 ```bash
-yay -S bili-tools-git
+yay -S bili-tools       # 稳定版
+yay -S bili-tools-git   # 最新 git 版
 ```
 
 ### Windows
