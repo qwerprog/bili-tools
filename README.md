@@ -43,6 +43,10 @@ brew install bt
 ### Cargo
 
 ```bash
+# 首次需安装 Rust 工具链
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 克隆并编译安装
 git clone https://github.com/QwerProg/bili-tools.git --depth=1
 cd bili-tools
 cargo install --path .
