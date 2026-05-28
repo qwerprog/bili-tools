@@ -19,9 +19,13 @@ winget install QwerProg.bt
 ```
 
 #### Scoop
-```bash
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
 scoop bucket add QwerProg https://github.com/QwerProg/bili-tools
 scoop install bt
+# 日后升级：scoop update bt
 ```
 
 #### 手动下载
@@ -81,7 +85,7 @@ Commands:
   stop     停止直播
   status   查看当前直播状态
   help     显示帮助信息
-  version  打印版本号
+  version  显示版本号
 
 提示：查看子命令参数请使用 `bt <command> -h`。例如 `bt start -h`。
 ```
@@ -132,7 +136,7 @@ bt status
 | CLI 解析 | `clap 4`（derive 宏） |
 | HTTP 请求 | `minreq`（轻量级，rustls TLS） |
 | 序列化 | `serde` + `serde_json` |
-| 终端 UI | `crossterm` |
+| 终端 UI | `dialoguer` |
 | 二维码 | `qrcode` + `image` |
 | 日志 | `log` + `env_logger` |
 | 时间 | `chrono` |
@@ -183,7 +187,7 @@ src/
 │   ├── manager.rs     # 开播/下播（调用 B站 API，写 stream_info.txt）
 │   └── stats.rs       # 下播后拉取直播统计数据
 ├── ui/
-│   ├── area_selector.rs  # crossterm 全屏两级分区选择器
+│   ├── area_selector.rs  # dialoguer 两级分区选择器
 │   └── prompts.rs        # 用户输入宏
 └── utils/
     ├── qrcode.rs      # 终端 ASCII 二维码 + PNG 保存
@@ -194,7 +198,7 @@ src/
 
 **`main.rs`** — 解析 `clap` 子命令并分发：`start` / `stop` / `status`。
 
-**`auth/`** — `qr_login.rs` 调用 Passport API 生成二维码，每 2 秒轮询一次扫码结果，成功后从回调 URL 中提取 `SESSDATA` 与 `bili_jct` 并保存到 `cookies.json`。`cookies.rs` 负责读写该文件，字段包括 `room_id`、`sessdata`、`csrf_token`、`live_key`。
+**`auth/`** — `qr_login.rs` 调用 Passport API 生成二维码，每 2 秒轮询一次扫码结果，成功后提取 `SESSDATA` 与 `bili_jct` 并保存到 `cookies.json`。`cookies.rs` 负责读写该文件，字段包括 `room_id`、`sessdata`、`csrf_token`、`live_key`。
 
 **`api/`** — 所有对 B 站接口的原始请求，每个函数只做单一职责：发请求、解析 JSON、返回数据或错误。HTTP 层统一使用 `minreq`（同步），伪装成 Edge 130 浏览器 UA。
 
