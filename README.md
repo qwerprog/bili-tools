@@ -1,4 +1,4 @@
-# bt
+# (bili-tools)bt
 
 B站直播开播工具，命令行一键开播/下播。
 
@@ -21,11 +21,16 @@ winget install QwerProg.bt
 #### Scoop
 
 ```powershell
+# 首次需安装 Scoop 本体
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+
+# 添加 bucket 并安装 bili-tools
 scoop bucket add QwerProg https://github.com/QwerProg/bili-tools
 scoop install bt
-# 日后升级：scoop update bt
+
+# 日后升级
+scoop update bt
 ```
 
 #### 手动下载
