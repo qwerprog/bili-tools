@@ -4,7 +4,30 @@ B站直播开播工具，命令行一键开播/下播。
 
 ## 安装
 
-### Arch Linux (AUR)
+### Cargo (通用)
+
+```bash
+# 首次需安装 Rust 工具链
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 克隆并编译安装
+git clone https://github.com/QwerProg/bili-tools.git --depth=1
+cd bili-tools
+cargo install --path .
+```
+
+编译安装到 `~/.cargo/bin/bt`，确认该目录在 PATH 中即可。
+
+### macOS (Homebrew)
+
+```bash
+brew tap QwerProg/bili-tools
+brew install bt
+```
+
+> Homebrew 会从源码编译，首次需要 Rust 工具链，`brew` 会自动安装。
+
+### Linux (AUR)
 
 ```bash
 yay -S bili-tools       # 稳定版
@@ -21,43 +44,15 @@ winget install QwerProg.bt
 #### Scoop
 
 ```powershell
-# 首次需安装 Scoop 本体
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
-
-# 添加 bucket 并安装 bili-tools
 scoop bucket add QwerProg https://github.com/QwerProg/bili-tools
 scoop install bt
-
-# 日后升级
-scoop update bt
+# 日后升级：scoop update bt
 ```
 
 #### 手动下载
 从 [Releases](https://github.com/QwerProg/bili-tools/releases) 下载 `bt-x86_64-windows.zip`，解压后即可运行。
-
-### macOS (Homebrew)
-
-```bash
-brew tap QwerProg/bili-tools
-brew install bt
-```
-
-> Homebrew 会从源码编译，首次需要 Rust 工具链，`brew` 会自动安装。
-
-### Cargo
-
-```bash
-# 首次需安装 Rust 工具链
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# 克隆并编译安装
-git clone https://github.com/QwerProg/bili-tools.git --depth=1
-cd bili-tools
-cargo install --path .
-```
-
-编译安装到 `~/.cargo/bin/bt`，确认该目录在 PATH 中即可。
 
 ## 使用
 
