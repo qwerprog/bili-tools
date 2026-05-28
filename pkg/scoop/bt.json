@@ -1,13 +1,13 @@
 {
-    "version": "0.1.1",
-    "description": "B站直播开播工具 — 命令行一键开播/下播",
-    "homepage": "https://github.com/QwerProg/bili-tools",
-    "license": "MIT",
-    "architecture": {
-        "64bit": {
-            "url": "https://github.com/QwerProg/bili-tools/releases/download/v0.1.1/bt-x86_64-windows.zip",
-            "hash": "sha256:2bf2b3b3dfd8cda36d0187d3c8f5982ffb8a3226d4f30e35c6e72004b29e1a7d"
-        }
-    },
-    "bin": "bt.exe"
+  "version": "0.1.2",
+  "description": "B站直播开播工具 — 命令行一键开播/下播",
+  "homepage": "https://github.com/QwerProg/bili-tools",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/QwerProg/bili-tools/releases/download/v0.1.2/bt-x86_64-windows.zip",
+      "hash": "sha256:4e958ec6c738ab27d520b45446f21864bba925e4f2eadab283a19306f7d618e8"
+    }
+  },
+  "bin": "bt.exe"
 }
