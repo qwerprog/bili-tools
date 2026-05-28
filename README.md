@@ -44,11 +44,18 @@ winget install QwerProg.bt
 #### Scoop
 
 ```powershell
+# 安装 Scoop
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+
+# 添加 bucket
 scoop bucket add QwerProg https://github.com/QwerProg/bili-tools
+
+# 安装
 scoop install bt
-# 日后升级：scoop update bt
+
+# 日后升级
+scoop update bt
 ```
 
 #### 手动下载
@@ -98,32 +105,38 @@ Commands:
 
 ```
 # 首次使用 — 扫码登录
-✅ 需要登录，开始登录流程...
+? 选择一种登录方式 › 扫码登录
+· 开始B站二维码登录流程...
 [终端弹出二维码]
+✅ 二维码已保存到 qrcode.png
+· 等待用户处理...
 
 # 登录后 — 正常开播
 bt start
 ✅ 登录状态正常
-📺 是否使用上次直播的分区？(回车/y=使用默认，n=选择新分区)
+? 是否使用上次直播的分区？ (Y/n)
 ✅ 使用上次的分区: 自习室 - 372
-📺 请输入新标题（直接回车保留原标题）:
-ℹ️ 开始直播！
-✅ RTMP地址: rtmp://live-push.bilivideo.com/live-bvc/
-✅ 推流码: ?strea************...g=13
-✅ 推流信息已写入 stream_info.txt
-✅ 直播已开启，程序退出
+? 请输入新标题（回车保留原标题） › 晚上随便播会儿
+
+🎬 直播已开启
+  推流地址  rtmp://live-push.bilivideo.com/live-bvc/
+  推流码    ?strea************...g=13
+  ·  推流信息已写入 stream_info.txt
 
 # 已在播时运行 — 询问下播
 bt start
-✅ 登录状态正常
-ℹ️ 检测到当前正在直播中
-📺 是否关闭直播？(y/n): y
-ℹ️ 准备关闭直播...
-✅ 成功关闭直播
-ℹ️ 直播统计信息:
-ℹ️ 新增粉丝 : 3
-ℹ️ 弹幕数 : 42
-ℹ️ 直播时长 : 7200
+· 检测到当前正在直播中
+? 检测到当前正在直播中，是否关闭？ (Y/n)
+· 准备关闭直播...
+🎬 直播已关闭
+  统计
+  新增粉丝  3
+  弹幕数量  42
+  直播时长  7200
+  最大在线  18
+  累计观看  156
+  粉丝勋章  2
+  金仓鼠    0
 
 # 查看状态 — 显示 B 站电视机 Logo
 bt status
@@ -173,6 +186,8 @@ graph TD
 
     utils --> qrcode_util[qrcode]
     utils --> string
+
+    start_cmd["start --relogin"] --> auth
 ```
 
 ```
@@ -192,23 +207,23 @@ src/
 │   └── stats.rs       # 下播后拉取直播统计数据
 ├── ui/
 │   ├── area_selector.rs  # dialoguer 两级分区选择器
-│   └── prompts.rs        # 用户输入宏
+│   └── prompts.rs        # 输出宏
 └── utils/
     ├── qrcode.rs      # 终端 ASCII 二维码 + PNG 保存
-    └── string.rs      # URL 参数解析、推流码打码
+    └── string.rs      # 推流码打码
 ```
 
 ### 模块说明
 
-**`main.rs`** — 解析 `clap` 子命令并分发：`start` / `stop` / `status`。
+**`main.rs`** — 解析 `clap` 子命令并分发：`start` / `stop` / `status`。`start` 支持 `--relogin` 与 `-y` 自动确认。
 
-**`auth/`** — `qr_login.rs` 调用 Passport API 生成二维码，每 2 秒轮询一次扫码结果，成功后提取 `SESSDATA` 与 `bili_jct` 并保存到 `cookies.json`。`cookies.rs` 负责读写该文件，字段包括 `room_id`、`sessdata`、`csrf_token`、`live_key`。
+**`auth/`** — `qr_login.rs` 调用 TV 登录 API 生成二维码并轮询，成功后提取 `SESSDATA` 与 `bili_jct` 保存到 `cookies.json`。同时支持账号密码 / 短信登录（可能触发风控）。`cookies.rs` 负责读写该文件，字段包括 `room_id`、`sessdata`、`csrf_token`、`live_key`。
 
 **`api/`** — 所有对 B 站接口的原始请求，每个函数只做单一职责：发请求、解析 JSON、返回数据或错误。HTTP 层统一使用 `minreq`（同步），伪装成 Edge 130 浏览器 UA。
 
 **`live/`** — `manager.rs` 负责开播（POST `startLive`，解析 RTMP 地址与推流码，写入 `stream_info.txt`，更新 `live_key`）和下播（POST `stopLive`）。`stats.rs` 在下播后调用 `StopLiveData` API 展示新增粉丝、弹幕数、在线峰值等统计。
 
-**`ui/area_selector.rs`** — 使用 `dialoguer::Select` 实现两级分区选择器。
+**`ui/area_selector.rs`** — 使用 `dialoguer::Select` 实现两级分区选择器，和登录菜单风格一致。
 
 ## 构建与发布
 
