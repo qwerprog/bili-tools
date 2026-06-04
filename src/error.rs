@@ -11,7 +11,7 @@ pub enum BiliLiveError {
     #[error("文件操作失败: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("数字解析失败: {0}")]
+    #[error("数字超过范围: {0}")]
     ParseInt(#[from] std::num::ParseIntError),
 
     #[error("二维码生成失败: {0}")]

@@ -8,11 +8,14 @@ use serde::Deserialize;
 use serde_json::Value;
 use url::Url;
 
+// B站 TV 端 API 密钥，用于生成短链接二维码
 const TV_APPKEY: &str = "4409e2ce8ffd12b8";
 const TV_APPSEC: &str = "59b43e04ad6965f34319062b478f83dd";
+// B站 Android 端 API 密钥，用于账号密码/短信登录
 const ANDROID_APPKEY: &str = "783bbb7264451d82";
 const ANDROID_APPSEC: &str = "2653583c8873dea268ab9386918b1d65";
 
+// B站 API 通用签名方式：query_string + appsec 做 MD5
 fn md5_sign(query: &str, appsec: &str) -> String {
     let digest = md5::compute(format!("{}{}", query, appsec));
     format!("{:x}", digest)
@@ -52,6 +55,7 @@ fn ts() -> String {
         .to_string()
 }
 
+// 从登录响应 JSON 中提取 SESSDATA 和 bili_jct
 fn extract_credentials(json: &Value) -> Result<(String, String)> {
     let cookies = json["data"]["cookie_info"]["cookies"]
         .as_array()
@@ -73,7 +77,9 @@ fn extract_credentials(json: &Value) -> Result<(String, String)> {
     Ok((sessdata, csrf_token))
 }
 
-// ── TV QR 登录 ──────────────────────────────────────────────
+// ── TV 扫码登录（二维码更短，相比 Web API 更易扫描）────────────────
+
+// 生成 TV 端二维码，返回短链接和 auth_code
 
 pub struct QRCodeData {
     /// 用于生成二维码的短链接
@@ -119,10 +125,12 @@ pub fn generate_qr_code() -> Result<QRCodeData> {
     Ok(QRCodeData { url, auth_code })
 }
 
+// 轮询 TV 二维码状态
+// 86039 = 等待扫码、86038 = 已扫码待确认、code=0 = 登录成功
 pub enum PollStatus {
     /// 等待扫码（86039）
     Waiting,
-    /// 已扫码，等待确认
+    /// 已扫码，等待确认（86038）
     Scanned,
     /// 登录成功，携带凭证
     Success {
@@ -167,8 +175,9 @@ pub fn poll_qr_status(auth_code: &str) -> Result<PollStatus> {
     }
 }
 
-// ── 账号密码 / 短信登录（Android） ──────────────────────────
+// ── 账号密码 / 短信登录（Android 端 API） ────────────────────
 
+// 获取 RSA 公钥，用于加密密码
 fn get_key() -> Result<(String, String)> {
     let query = format!("appkey={}", ANDROID_APPKEY);
     let sign = md5_sign(&query, ANDROID_APPSEC);
@@ -195,6 +204,7 @@ fn get_key() -> Result<(String, String)> {
     Ok((hash.to_string(), key.to_string()))
 }
 
+// 使用 B站 Android API 进行账号密码登录
 pub fn login_by_password(username: &str, password: &str) -> Result<(String, String)> {
     let (hash, pub_key) = get_key()?;
     let pub_key = RsaPublicKey::from_public_key_pem(&pub_key)
@@ -288,6 +298,7 @@ fn generate_fake_buvid() -> String {
     )
 }
 
+// 发送短信验证码，可能触发滑块验证码（recaptcha）
 pub fn send_sms_with_recaptcha(
     phone_number: u64,
     country_code: u32,

@@ -1,15 +1,17 @@
 use crate::api::client::DEFAULT_USER_AGENT;
 use crate::auth::cookies::read_cookies;
 use crate::error::{BiliLiveError, Result};
+use crate::utils::paths::data_file;
 use crate::{user_info, user_warning};
 
 pub fn check_status() -> Result<bool> {
     user_info!("检查登录状态...");
-    if !std::path::Path::new("cookies.json").exists() {
+    let cookie_path = data_file("cookies.json");
+    if !cookie_path.exists() {
         user_warning!("cookies.json文件不存在");
         return Ok(false);
     }
-    if std::fs::read_to_string("cookies.json")
+    if std::fs::read_to_string(&cookie_path)
         .map_err(BiliLiveError::Io)?
         .is_empty()
     {

@@ -7,7 +7,8 @@ mod ui;
 mod utils;
 
 use crate::logger::init_logger;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use crossterm::style::Stylize;
 use dialoguer::{Confirm, Input, theme::ColorfulTheme};
 use error::{BiliLiveError, Result};
 use std::io::Write;
@@ -17,7 +18,7 @@ use std::io::Write;
     name = "bt",
     author,
     version,
-    about = "B站直播开播工具 — 命令行一键开播/下播",
+    about = "B站工具箱 — 命令行一键开播/下播",
     long_about = None,
     override_usage = "bt <COMMAND> [OPTION]",
     disable_help_flag = true,
@@ -27,6 +28,17 @@ use std::io::Write;
 struct Args {
     #[command(subcommand)]
     command: Commands,
+}
+
+// shell 补全支持的类型
+#[derive(ValueEnum, Clone)]
+enum Shell {
+    /// Bash 补全
+    Bash,
+    /// Zsh 补全
+    Zsh,
+    /// Fish 补全
+    Fish,
 }
 
 #[derive(Subcommand)]
@@ -79,8 +91,21 @@ enum Commands {
 
     /// 打印版本号
     Version,
+
+    /// 生成 shell 补全脚本
+    /// 用法: bt completions zsh --install
+    Completions {
+        /// 目标 shell (bash/zsh/fish)
+        #[arg(value_enum)]
+        shell: Shell,
+
+        /// 自动安装到 ~/.zsh/completions/ 等系统目录
+        #[arg(long, help = "自动安装到系统补全目录")]
+        install: bool,
+    },
 }
 
+// 程序入口：解析命令行参数并分发到对应子命令
 fn main() {
     let args = Args::parse();
     init_logger();
@@ -91,6 +116,7 @@ fn main() {
     }
 }
 
+// 根据子命令执行对应逻辑
 fn run(args: Args) -> Result<()> {
     match args.command {
         Commands::Help => {
@@ -101,12 +127,58 @@ fn run(args: Args) -> Result<()> {
             Ok(())
         }
         Commands::Version => {
-            use clap::CommandFactory;
             println!("{}", Args::command().render_version());
             Ok(())
         }
+        // 生成 shell 补全脚本，支持 bash/zsh/fish
+        Commands::Completions { shell, install } => {
+            use clap::CommandFactory;
+            use clap_complete::{generate, shells};
+            let mut cmd = Args::command();
+            let mut buf = Vec::new();
+            match shell {
+                Shell::Bash => generate(shells::Bash, &mut cmd, "bt", &mut buf),
+                Shell::Zsh => generate(shells::Zsh, &mut cmd, "bt", &mut buf),
+                Shell::Fish => generate(shells::Fish, &mut cmd, "bt", &mut buf),
+            }
+            if install {
+                // 写到各 shell 的标准补全目录
+                let path = match shell {
+                    // bash: ~/.local/share/bash-completion/completions/
+                    Shell::Bash => {
+                        let home = std::env::var("HOME").unwrap_or_default();
+                        format!("{home}/.local/share/bash-completion/completions")
+                    }
+                    // zsh: ~/.zsh/completions/
+                    Shell::Zsh => {
+                        let home = std::env::var("HOME").unwrap_or_default();
+                        format!("{home}/.zsh/completions")
+                    }
+                    // fish: ~/.config/fish/completions/
+                    Shell::Fish => {
+                        let home = std::env::var("HOME").unwrap_or_default();
+                        format!("{home}/.config/fish/completions")
+                    }
+                };
+                std::fs::create_dir_all(&path)?;
+                let file = match shell {
+                    Shell::Bash => format!("{path}/bt"),
+                    Shell::Zsh => format!("{path}/_bt"),
+                    Shell::Fish => format!("{path}/bt.fish"),
+                };
+                std::fs::write(&file, &buf)?;
+                user_success!("补全脚本已安装到 {}", file);
+                user_info!("请执行 source ~/.zshrc 或重新打开终端即可生效");
+            } else {
+                // 未指定 --install，直接输出到 stdout（可 source）
+                std::io::stdout().write_all(&buf)?;
+            }
+            Ok(())
+        }
+        // ── stop 子命令：下播（支持 -d 倒计时）──
         Commands::Stop { delay, .. } => {
             if let Some(d) = delay {
+                // 支持 30m / 1h30m / 90s 格式
                 let secs = parse_delay(&d)?;
                 user_info!("将在 {} 后自动下播，按 Ctrl+C 取消", d);
                 let total = secs;
@@ -144,7 +216,24 @@ fn run(args: Args) -> Result<()> {
         }
         Commands::Status => {
             ensure_login()?;
-            println!("{}", include_str!("logo.txt"));
+            // 按终端宽度截断每行，避免换行
+            if let Ok((cols, _)) = crossterm::terminal::size() {
+                let w = cols as usize;
+                let pink = crossterm::style::Color::Rgb {
+                    r: 251,
+                    g: 114,
+                    b: 153,
+                };
+                for line in include_str!("logo.txt").lines() {
+                    let end = line
+                        .char_indices()
+                        .take_while(|(i, _)| *i < w)
+                        .map(|(i, c)| i + c.len_utf8())
+                        .last()
+                        .unwrap_or(0);
+                    println!("{}", &line[..end.min(line.len())].with(pink));
+                }
+            }
             let cookies = auth::cookies::read_cookies()?;
             let is_live = api::live::check_live_status(cookies.room_id)?;
             if is_live {
@@ -166,6 +255,7 @@ fn run(args: Args) -> Result<()> {
             ..
         } => {
             let auto_yes = yes;
+            // 有 --relogin 参数时先清除登录信息
             if relogin {
                 auth::cookies::delete_cookies()?;
                 user_success!("已清除登录信息，重新登录");
@@ -179,6 +269,7 @@ fn run(args: Args) -> Result<()> {
 
             if api::live::check_live_status(cookies.room_id)? {
                 user_info!("检测到当前正在直播中");
+                // -y 模式下自动关闭，否则弹出确认对话框
                 let close_live = if auto_yes {
                     user_info!("已开启自动确认，准备关闭直播...");
                     true
@@ -199,6 +290,7 @@ fn run(args: Args) -> Result<()> {
                 return Ok(());
             }
 
+            // 分区选择：--area 指定 > -y 自动 > 交互确认 > 手动选择
             let area_id = if let Some(id) = area {
                 id
             } else if auto_yes {
@@ -223,6 +315,7 @@ fn run(args: Args) -> Result<()> {
                 }
             };
 
+            // 标题输入：--title 指定 > -y 跳过 > 交互输入
             if let Some(ref t) = title {
                 if !t.is_empty() {
                     api::live::update_title(&cookies, t)?;
@@ -247,6 +340,7 @@ fn run(args: Args) -> Result<()> {
     }
 }
 
+// 解析延迟时间字符串，返回秒数。支持 h(时) m(分) s(秒) 单位
 fn parse_delay(input: &str) -> Result<u64> {
     let mut total = 0u64;
     let mut num = String::new();
@@ -272,6 +366,7 @@ fn parse_delay(input: &str) -> Result<u64> {
     Ok(total)
 }
 
+// 检查并确保登录状态，如未登录则引导登录
 fn ensure_login() -> Result<()> {
     if auth::check_status()? {
         user_success!("登录状态正常");

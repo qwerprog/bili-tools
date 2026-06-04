@@ -71,6 +71,7 @@ bt start -a 398 -t "标题" -s   # 快捷参数
 bt stop               # 下播
 bt stop -d 30m        # 30分钟后下播（阻塞进程，Ctrl+C 取消）
 bt status             # 查看直播状态
+bt completions zsh --install  # 安装 Tab 补全
 ```
 
 ### 开播参数
@@ -96,6 +97,7 @@ Commands:
   start    开始直播 (默认支持交互式选择)
   stop     停止直播
   status   查看当前直播状态
+  completions  生成 shell 补全脚本
   help     显示帮助信息
   version  显示版本号
 
@@ -216,7 +218,7 @@ src/
 
 ### 模块说明
 
-**`main.rs`** — 解析 `clap` 子命令并分发：`start` / `stop` / `status`。`start` 支持 `--relogin` 与 `-y` 自动确认。
+**`main.rs`** — 解析 `clap` 子命令并分发：`start` / `stop` / `status` / `help` / `version`。`start` 支持 `--relogin` 与 `-y` 自动确认；`stop` 支持 `--delay` 倒计时下播。
 
 **`auth/`** — `qr_login.rs` 调用 TV 登录 API 生成二维码并轮询，成功后提取 `SESSDATA` 与 `bili_jct` 保存到 `cookies.json`。同时支持账号密码 / 短信登录（可能触发风控）。`cookies.rs` 负责读写该文件，字段包括 `room_id`、`sessdata`、`csrf_token`、`live_key`。
 

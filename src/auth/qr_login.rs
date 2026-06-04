@@ -4,10 +4,12 @@ use crate::api::passport::{
 };
 use crate::auth::cookies::save_cookies_from_credentials;
 use crate::error::{BiliLiveError, Result};
+use crate::utils::paths::data_file;
 use crate::utils::qrcode::{generate_and_save_qrcode, print_qrcode_in_terminal};
 use crate::{user_info, user_success, user_warning};
 use dialoguer::{Input, Password, Select, theme::ColorfulTheme};
 
+// 登录入口：显示 dialoguer 菜单，根据选择分发到不同登录方式
 pub fn start_login() -> Result<()> {
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("选择一种登录方式")
@@ -28,6 +30,7 @@ pub fn start_login() -> Result<()> {
     }
 }
 
+// 账号密码登录流程
 fn login_by_password_flow() -> Result<()> {
     let username: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("请输入账号")
@@ -44,6 +47,7 @@ fn login_by_password_flow() -> Result<()> {
     Ok(())
 }
 
+// 短信登录流程（含滑块验证码处理）
 fn login_by_sms_flow() -> Result<()> {
     let country_code: u32 = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("请输入手机国家代码")
@@ -99,6 +103,7 @@ fn login_by_sms_flow() -> Result<()> {
     Ok(())
 }
 
+// 二维码登录流程（TV API）
 fn login_by_qrcode() -> Result<()> {
     user_info!("开始B站二维码登录流程...");
 
@@ -107,13 +112,15 @@ fn login_by_qrcode() -> Result<()> {
 
     print_qrcode_in_terminal(&qr_data.url)?;
 
-    generate_and_save_qrcode(&qr_data.url, "qrcode.png")?;
+    let qr_path = data_file("qrcode.png");
+    generate_and_save_qrcode(&qr_data.url, qr_path.to_str().unwrap_or("qrcode.png"))?;
     user_success!("二维码已保存到 qrcode.png");
     user_info!("等待用户处理...");
 
     poll_until_success(&qr_data.auth_code)
 }
 
+// 浏览器登录流程（输出链接供用户在浏览器中完成）
 fn login_by_browser() -> Result<()> {
     user_info!("开始B站浏览器登录流程...");
 
@@ -127,6 +134,7 @@ fn login_by_browser() -> Result<()> {
     poll_until_success(&qr_data.auth_code)
 }
 
+// 轮询二维码状态直到登录成功
 fn poll_until_success(auth_code: &str) -> Result<()> {
     loop {
         let status = poll_qr_status(auth_code)?;
@@ -141,7 +149,8 @@ fn poll_until_success(auth_code: &str) -> Result<()> {
             } => {
                 user_success!("登录成功！");
                 save_cookies_from_credentials(&sessdata, &csrf_token)?;
-                std::fs::remove_file("qrcode.png").ok();
+                let qr_path = data_file("qrcode.png");
+                std::fs::remove_file(&qr_path).ok();
                 break;
             }
         }

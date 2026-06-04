@@ -2,6 +2,7 @@ use crate::api::area::fetch_area_list;
 use crate::error::{BiliLiveError, Result};
 use dialoguer::{Select, theme::ColorfulTheme};
 
+// 交互式分区选择器：两级 dialoguer::Select 菜单
 pub fn get_area_choice() -> Result<u32> {
     let area_list = fetch_area_list()?;
     let data = area_list["data"]

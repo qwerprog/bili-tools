@@ -1,0 +1,15 @@
+# 测试 Windows 平台安装
+name: Test WinGet Installation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - name: Update WinGet Source
+        run: winget source update
+
+      - name: Test Install
+        run: winget install QwerProg.bt
