@@ -1,5 +1,6 @@
 # 测试 Windows 平台安装
 name: Test WinGet Installation
+run: winget install QwerProg.bt --accept-source-agreements --accept-package-agreements
 
 on:
   workflow_dispatch:
