@@ -1,5 +1,5 @@
-# 测试 Windows 平台安装
-name: Test WinGet Installation
+# 测试 Windows 平台安装及命令可用性
+name: Test WinGet Installation and Commands
 
 on:
   workflow_dispatch:
@@ -13,3 +13,19 @@ jobs:
 
       - name: Test Install
         run: winget install QwerProg.bt --accept-source-agreements --accept-package-agreements
+
+      - name: Verify CLI Commands
+        run: |
+          # 1. 临时刷新当前会话的环境变量，确保能立刻找到 bt 命令
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
+          # 2. 打印版本，验证程序没有闪退且基础响应正常
+          echo "=== Testing Version ==="
+          bt --version
+
+          # 3. 打印帮助信息，验证参数解析正常
+          echo "=== Testing Help ==="
+          bt --help
+
+          # 4. 你可以在下方继续添加你想测试的其它命令，比如：
+          # bt check
