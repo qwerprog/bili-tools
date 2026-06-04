@@ -124,7 +124,7 @@ bt start
 🎬 直播已开启
   推流地址  rtmp://live-push.bilivideo.com/live-bvc/
   推流码    ?strea************...g=13
-  ·  推流信息已写入 stream_info.txt
+  ·  推流信息已写入 ~/.config/bt/stream_info.txt
 
 # 已在播时运行 — 询问下播
 bt start
@@ -247,6 +247,18 @@ panic = "abort"
 strip = "symbols"
 ```
 
+### 版本号更新
+
+版本号以 `Cargo.toml` 为准，同步脚本会自动更新所有包管理器清单：
+
+```bash
+# 1. 修改 Cargo.toml 中的 version
+# 2. 运行同步脚本
+./scripts/sync-version.sh
+```
+
+该脚本会同步更新 `pkg/scoop/bt.json` 和 `pkg/winget/QwerProg.bt.installer.yaml` 中的版本号与下载 URL。
+
 ## 设计亮点
 
 - **极简依赖**：用 `minreq` 替代 `reqwest`，去掉异步运行时，整体为同步阻塞模型，逻辑直观
@@ -257,7 +269,7 @@ strip = "symbols"
 
 ## 注意事项
 
-- `cookies.json` 包含敏感凭证（SESSDATA、bili_jct），请勿泄露或提交到版本控制
-- 推流信息写入 `stream_info.txt`，第一行 RTMP 地址，第二行完整推流码
+- `cookies.json` 包含敏感凭证（SESSDATA、bili_jct），存储在系统数据目录（macOS/Linux: `~/.config/bt/`，Windows: `%APPDATA%/bt/`），请勿泄露或提交到版本控制
+- 推流信息写入 `stream_info.txt`（同数据目录），第一行 RTMP 地址，第二行完整推流码
 - 高频调用接口可能触发风控，请合理使用
 - 本项目仅供学习交流，禁止用于违反 B 站用户协议的行为
