@@ -14,24 +14,24 @@ jobs:
     name: Build Windows
     runs-on: windows-latest
     outputs:
-      sha256: ${{ steps.package.outputs.sha256 }}
+      sha256_x86: ${{ steps.package_x86.outputs.sha256 }}
+      sha256_arm: ${{ steps.package_arm.outputs.sha256 }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-msvc
+          targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
 
-      - name: Build
+      - name: Build x86_64
         run: cargo build --target x86_64-pc-windows-msvc --release --locked
 
-      - name: Validate winget manifest
-        shell: pwsh
-        run: winget validate --nowarn pkg/winget/QwerProg.bt.installer.yaml
+      - name: Build ARM64
+        run: cargo build --target aarch64-pc-windows-msvc --release --locked
 
-      - name: Package
-        id: package
+      - name: Package x86_64
+        id: package_x86
         shell: pwsh
         run: |
           $exe = "target/x86_64-pc-windows-msvc/release/bt.exe"
@@ -40,8 +40,21 @@ jobs:
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$hash  $zip" | Out-File -Encoding ascii SHA256SUMS
           "sha256=$hash" >> $env:GITHUB_OUTPUT
-          $manifest = "pkg/winget/QwerProg.bt.installer.yaml"
-          (Get-Content $manifest) -replace 'InstallerSha256: .+', "InstallerSha256: $hash" | Set-Content $manifest
+
+      - name: Package ARM64
+        id: package_arm
+        shell: pwsh
+        run: |
+          $exe = "target/aarch64-pc-windows-msvc/release/bt.exe"
+          $zip = "bt-arm64-windows.zip"
+          Compress-Archive -Path $exe -DestinationPath $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zip" | Out-File -Encoding ascii SHA256SUMS -Append
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+
+      - name: Validate winget manifest
+        shell: pwsh
+        run: winget validate --nowarn pkg/winget/QwerProg.bt.installer.yaml
 
       - name: Get version
         id: version
@@ -53,7 +66,25 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body: |
+            ## 新增
+
+            - **ARM64 Windows 支持**：新增 `bt-arm64-windows.zip`，适用于 Surface Pro X / 骁龙笔记本等 ARM 设备
+            - **Shell Tab 补全**：`bt completions <bash|zsh|fish> --install` 一键安装命令行补全
+            - **定时下播**：`bt stop -d 30m` 支持倒计时自动下播，按 Ctrl+C 取消
+            - **数据文件迁移**：`cookies.json`、`stream_info.txt` 等移至系统标准数据目录（`~/.config/bt/` 或 `%APPDATA%/bt/`），不再污染工作目录
+
+            ## 变更
+
+            - 依赖版本升级（`serde_json`、`clap`、`rsa`、`log`）
+            - 新增 `clap_complete`、`dirs` 依赖
+            - 完善代码注释与 README 文档
+
             ## 安装
+
+            ### Winget
+            ```
+            winget install QwerProg.bt
+            ```
 
             ### Scoop
             ```
@@ -61,15 +92,15 @@ jobs:
             scoop install bt
             ```
 
-            ### Winget
-            ```
-            winget install QwerProg.bt
-            ```
-
             ### 手动下载
-            下载 `bt-x86_64-windows.zip`，解压后即可运行。
+
+            | 文件 | 适用平台 |
+            |---|---|
+            | `bt-x86_64-windows.zip` | 传统 x64 PC 和笔记本 |
+            | `bt-arm64-windows.zip` | ARM 设备（骁龙 X 系列、Surface Pro X 等） |
           files: |
             bt-x86_64-windows.zip
+            bt-arm64-windows.zip
             SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,7 +116,7 @@ jobs:
       - name: Generate manifests
         run: |
           VERSION="${{ needs.build.outputs.version }}"
-          SHA256="${{ needs.build.outputs.sha256 }}"
+          SHA256="${{ needs.build.outputs.sha256_x86 }}"
           TEMPLATE_VERSION="$(find pkg/winget-pkgs/manifests/q/QwerProg/bt -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort -V | tail -n1)"
           [ -n "$TEMPLATE_VERSION" ] || { echo "Error: no winget template version found in pkg/winget-pkgs/manifests/q/QwerProg/bt"; exit 1; }
           SRC="pkg/winget-pkgs/manifests/q/QwerProg/bt/${TEMPLATE_VERSION}"
