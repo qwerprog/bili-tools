@@ -21,11 +21,7 @@ jobs:
 
           # 2. 打印版本，验证程序没有闪退且基础响应正常
           echo "=== Testing Version ==="
-          bt --version
+          bt version
 
-          # 3. 打印帮助信息，验证参数解析正常
-          echo "=== Testing Help ==="
-          bt --help
-
-          # 4. 你可以在下方继续添加你想测试的其它命令，比如：
-          # bt check
+          echo "=== Testing bt ==="
+          bt
