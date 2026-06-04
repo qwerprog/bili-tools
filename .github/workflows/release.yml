@@ -25,9 +25,13 @@ jobs:
           targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
 
       - name: Build x86_64
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
         run: cargo build --target x86_64-pc-windows-msvc --release --locked
 
       - name: Build ARM64
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
         run: cargo build --target aarch64-pc-windows-msvc --release --locked
 
       - name: Package x86_64
@@ -72,6 +76,7 @@ jobs:
             - **Shell Tab 补全**：`bt completions <bash|zsh|fish> --install` 一键安装命令行补全
             - **定时下播**：`bt stop -d 30m` 支持倒计时自动下播，按 Ctrl+C 取消
             - **数据文件迁移**：`cookies.json`、`stream_info.txt` 等移至系统标准数据目录（`~/.config/bt/` 或 `%APPDATA%/bt/`），不再污染工作目录
+            - **静态链接运行时**：Windows 版本不再依赖 VC++ Redistributable，解压即用
 
             ## 变更
 

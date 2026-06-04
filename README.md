@@ -236,7 +236,7 @@ CI 由 GitHub Actions 驱动，推送 `v*` tag 时自动执行：
 2. 打包为 `bt-x86_64-windows.zip`，计算 SHA256，发布 GitHub Release
 3. 自动向 `microsoft/winget-pkgs` 提交 PR 更新 winget 清单
 
-Release 构建参数已做极限体积优化：
+Release 构建参数已做极限体积优化，并静态链接 MSVC 运行时，**无需额外安装 VC++ Redistributable**：
 
 ```toml
 [profile.release]
