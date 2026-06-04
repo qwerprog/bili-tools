@@ -23,5 +23,5 @@ jobs:
           echo "=== Testing Version ==="
           bt version
 
-          echo "=== Testing bt ==="
-          bt
+          echo "=== Testing start ==="
+          bt start
