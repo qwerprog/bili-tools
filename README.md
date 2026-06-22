@@ -64,13 +64,13 @@ scoop update bt
 ## 使用
 
 ```bash
-bt start              # 开播（默认，交互式）
-bt start -y           # 自动同意所有确认
-bt start -r           # 清除登录并重新登录后开播
+bt start                      # 开播（默认，交互式）
+bt start -y                   # 自动同意所有确认
+bt start -r                   # 清除登录并重新登录后开播
 bt start -a 398 -t "标题" -s   # 快捷参数
-bt stop               # 下播
-bt stop -d 30m        # 30分钟后下播（阻塞进程，Ctrl+C 取消）
-bt status             # 查看直播状态
+bt stop                       # 下播
+bt stop -d 30m                # 30分钟后下播（阻塞进程，Ctrl+C 取消）
+bt status                     # 查看直播状态
 bt completions zsh --install  # 安装 Tab 补全
 ```
 
