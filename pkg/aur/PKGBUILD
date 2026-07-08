@@ -18,8 +18,9 @@ pkgver() {
 
 build() {
   cd "$srcdir/bili-tools"
-  # Arch's lld is incompatible with ring 0.17 + fat LTO; force GNU bfd linker
-  export RUSTFLAGS="-C link-arg=-fuse-ld=bfd"
+  # Rust 1.87+ uses bundled lld by default on Linux, which is incompatible
+  # with ring 0.17. Force the traditional gcc linker flavor (ld.bfd) instead.
+  export RUSTFLAGS="-C linker-flavor=gcc"
   cargo build --release --locked
 }
 
