@@ -7,7 +7,7 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/QwerProg/bili-tools"
 license=('MIT')
 depends=('gcc-libs' 'openssl')
-makedepends=('cargo' 'git')
+makedepends=('cargo' 'git' 'binutils')
 source=("git+https://github.com/QwerProg/bili-tools.git")
 sha256sums=('SKIP')
 
@@ -18,6 +18,8 @@ pkgver() {
 
 build() {
   cd "$srcdir/bili-tools"
+  # Arch's lld is incompatible with ring 0.17 + fat LTO; force GNU bfd linker
+  export RUSTFLAGS="-C link-arg=-fuse-ld=bfd"
   cargo build --release --locked
 }
 
