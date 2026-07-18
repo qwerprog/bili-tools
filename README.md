@@ -230,11 +230,12 @@ src/
 
 ## 构建与发布
 
-CI 由 GitHub Actions 驱动，推送 `v*` tag 时自动执行：
+CI 由 GitHub Actions 驱动，推送 `v*` tag 时自动执行多平台交叉编译与发布：
 
-1. 在 `windows-latest` 编译 `x86_64-pc-windows-msvc` 可执行文件
-2. 打包为 `bt-x86_64-windows.zip`，计算 SHA256，发布 GitHub Release
-3. 自动向 `microsoft/winget-pkgs` 提交 PR 更新 winget 清单
+1. **Windows** (`windows-latest`)：构建 `x86_64` (x64) 与 `aarch64` (ARM64) 二进制，并分别打包为 `bt-x86_64-windows.zip` 和 `bt-arm64-windows.zip`。
+2. **macOS** (`macos-latest`)：构建 `x86_64` (Intel) 与 `aarch64` (Apple Silicon) 二进制，分别打包为 `bt-x86_64-macos.zip` 和 `bt-arm64-macos.zip`。
+3. **Linux** (`ubuntu-latest`)：构建 `x86_64` 与 `aarch64` 二进制，分别打包为 `bt-x86_64-linux.tar.gz` 和 `bt-arm64-linux.tar.gz`。
+4. **Winget 自动提交**：自动计算 `x86_64` Windows 构建包的 SHA256 哈希值，生成清单并自动向微软官方的 `microsoft/winget-pkgs` 提交 PR。
 
 Release 构建参数已做极限体积优化，并静态链接 MSVC 运行时，**无需额外安装 VC++ Redistributable**：
 
