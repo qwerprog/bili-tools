@@ -13,7 +13,7 @@ use dialoguer::{Input, Password, Select, theme::ColorfulTheme};
 pub fn start_login() -> Result<()> {
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("选择一种登录方式")
-        .default(1)
+        .default(0)
         .item("扫码登录")
         .item("短信登录")
         .item("账号密码")
