@@ -1,14 +1,15 @@
 # Maintainer: QwerProg
 pkgname=bili-tools-git
-pkgver=0.1.0.r1.b491f25
+pkgver=0.1.3.r6.g263e2d6
 pkgrel=1
 pkgdesc="B站直播开播工具 — 命令行一键开播/下播"
 arch=('x86_64' 'aarch64')
 url="https://github.com/QwerProg/bili-tools"
 license=('MIT')
-depends=('gcc-libs' 'openssl')
-makedepends=('cargo' 'git' 'binutils')
+depends=('gcc-libs')
+makedepends=('cargo' 'git')
 source=("git+https://github.com/QwerProg/bili-tools.git")
+options=(!lto)
 sha256sums=('SKIP')
 
 pkgver() {
@@ -18,9 +19,6 @@ pkgver() {
 
 build() {
   cd "$srcdir/bili-tools"
-  # Rust 1.87+ uses bundled lld by default on Linux, which is incompatible
-  # with ring 0.17. Force the traditional gcc linker flavor (ld.bfd) instead.
-  export RUSTFLAGS="-C linker-flavor=gcc"
   cargo build --release --locked
 }
 
