@@ -200,25 +200,25 @@ graph TD
 
 ```
 src/
-├── main.rs            # 入口与命令分发
+├── main.rs               # 入口与命令分发
 ├── api/
-│   ├── client.rs      # 公共 User-Agent 常量
-│   ├── passport.rs    # 二维码生成/轮询、room_id 查询
-│   ├── live.rs        # 直播状态查询、分区查询、标题更新
-│   └── area.rs        # 拉取全量分区列表
+│   ├── client.rs         # 公共 User-Agent 常量
+│   ├── passport.rs       # 二维码生成/轮询、room_id 查询
+│   ├── live.rs           # 直播状态查询、分区查询、标题更新
+│   └── area.rs           # 拉取全量分区列表
 ├── auth/
-│   ├── login.rs       # 登录流程（含账号密码/短信/扫码/浏览器）
-│   ├── cookies.rs     # cookies.json 读写管理
-│   └── session.rs     # 登录状态验证
+│   ├── login.rs          # 登录流程（含账号密码/短信/扫码/浏览器）
+│   ├── cookies.rs        # cookies.json 读写管理
+│   └── session.rs        # 登录状态验证
 ├── live/
-│   ├── manager.rs     # 开播/下播（调用 B站 API，写 stream_info.txt）
-│   └── stats.rs       # 下播后拉取直播统计数据
+│   ├── manager.rs        # 开播/下播（调用 B站 API，写 stream_info.txt）
+│   └── stats.rs          # 下播后拉取直播统计数据
 ├── ui/
 │   ├── area_selector.rs  # dialoguer 两级分区选择器
 │   └── prompts.rs        # 输出宏
 └── utils/
-    ├── qrcode.rs      # 终端 ASCII 二维码 + PNG 保存
-    └── string.rs      # 推流码打码
+    ├── qrcode.rs         # 终端 ASCII 二维码 + PNG 保存
+    └── string.rs         # 推流码打码
 ```
 
 ### 模块说明
