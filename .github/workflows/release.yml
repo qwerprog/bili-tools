@@ -70,19 +70,13 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           body: |
-            ## 新增
+            ## 新增与优化
 
-            - **ARM64 Windows 支持**：新增 `bt-arm64-windows.zip`，适用于 Surface Pro X / 骁龙笔记本等 ARM 设备
-            - **Shell Tab 补全**：`bt completions <bash|zsh|fish> --install` 一键安装命令行补全
-            - **定时下播**：`bt stop -d 30m` 支持倒计时自动下播，按 Ctrl+C 取消
-            - **数据文件迁移**：`cookies.json`、`stream_info.txt` 等移至系统标准数据目录（`~/.config/bt/` 或 `%APPDATA%/bt/`），不再污染工作目录
-            - **静态链接运行时**：Windows 版本不再依赖 VC++ Redistributable，解压即用
-
-            ## 变更
-
-            - 依赖版本升级（`serde_json`、`clap`、`rsa`、`log`）
-            - 新增 `clap_complete`、`dirs` 依赖
-            - 完善代码注释与 README 文档
+            - **终端 Ctrl+C 退出自动恢复光标**：引入了信号监听机制，当用户在任意交互选单界面通过 `Ctrl+C` 退出程序时，能自动显示光标并关闭终端原始模式（Raw Mode），避免终端输入状态损坏。
+            - **解决 Arch Linux AUR 构建冲突**：在 `PKGBUILD` 中添加了 `options=(!lto)`，成功规避了 Arch 默认的全局 LTO 与 `ring` 密码库汇编符号冲突导致的编译期报错。
+            - **登录模块重构与命名优化**：将原本的 `qr_login.rs` 重命名为更契合当前多登录方式的 `login.rs`，并重新理顺了登录选项顺序，默认对齐“扫码登录”。
+            - **清理依赖项**：从包的运行期依赖中移除了无用的 `openssl`。由于采用纯 Rust 的 `rustls` 网络套件，生成的二进制文件无需动态链接 OpenSSL。
+            - **CI 工作流全面升级**：将 GitHub Actions 工作流中的 `actions/checkout` 升级到 `v7`，`softprops/action-gh-release` 升级到 `v3`，完美适配最新的 Node 24 运行环境，消除了老旧版本的废弃警告。
 
             ## 安装
 
