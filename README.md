@@ -173,7 +173,7 @@ graph TD
     main --> ui
 
     auth --> cookies
-    auth --> qr_login
+    auth --> login
     auth --> session
 
     api --> passport
@@ -202,7 +202,7 @@ src/
 │   ├── live.rs        # 直播状态查询、分区查询、标题更新
 │   └── area.rs        # 拉取全量分区列表
 ├── auth/
-│   ├── qr_login.rs    # 扫码登录流程
+│   ├── login.rs       # 登录流程（含账号密码/短信/扫码/浏览器）
 │   ├── cookies.rs     # cookies.json 读写管理
 │   └── session.rs     # 登录状态验证
 ├── live/
@@ -220,7 +220,7 @@ src/
 
 **`main.rs`** — 解析 `clap` 子命令并分发：`start` / `stop` / `status` / `help` / `version`。`start` 支持 `--relogin` 与 `-y` 自动确认；`stop` 支持 `--delay` 倒计时下播。
 
-**`auth/`** — `qr_login.rs` 调用 TV 登录 API 生成二维码并轮询，成功后提取 `SESSDATA` 与 `bili_jct` 保存到 `cookies.json`。同时支持账号密码 / 短信登录（可能触发风控）。`cookies.rs` 负责读写该文件，字段包括 `room_id`、`sessdata`、`csrf_token`、`live_key`。
+**`auth/`** — `login.rs` 管理多种登录流程（包括扫码、账号密码、短信及浏览器登录）。其中扫码登录调用 TV 登录 API 生成二维码并轮询，成功后提取 `SESSDATA` 与 `bili_jct` 保存到 `cookies.json`。`cookies.rs` 负责读写该文件，字段包括 `room_id`、`sessdata`、`csrf_token`、`live_key`。
 
 **`api/`** — 所有对 B 站接口的原始请求，每个函数只做单一职责：发请求、解析 JSON、返回数据或错误。HTTP 层统一使用 `minreq`（同步），伪装成 Edge 130 浏览器 UA。
 
