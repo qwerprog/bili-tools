@@ -223,15 +223,14 @@ src/
 
 ### 模块说明
 
-**`main.rs`** — 解析 `clap` 子命令并分发：`start` / `stop` / `status` / `help` / `version`。`start` 支持 `--relogin` 与 `-y` 自动确认；`stop` 支持 `--delay` 倒计时下播。
-
-**`auth/`** — `login.rs` 管理多种登录流程（包括扫码、账号密码、短信及浏览器登录）。其中扫码登录调用 TV 登录 API 生成二维码并轮询，成功后提取 `SESSDATA` 与 `bili_jct` 保存到 `cookies.json`。`cookies.rs` 负责读写该文件，字段包括 `room_id`、`sessdata`、`csrf_token`、`live_key`。
-
-**`api/`** — 所有对 B 站接口的原始请求，每个函数只做单一职责：发请求、解析 JSON、返回数据或错误。HTTP 层统一使用 `minreq`（同步），伪装成 Edge 130 浏览器 UA。
-
-**`live/`** — `manager.rs` 负责开播（POST `startLive`，解析 RTMP 地址与推流码，写入 `stream_info.txt`，更新 `live_key`）和下播（POST `stopLive`）。`stats.rs` 在下播后调用 `StopLiveData` API 展示新增粉丝、弹幕数、在线峰值等统计。
-
-**`ui/area_selector.rs`** — 使用 `dialoguer::Select` 实现两级分区选择器，和登录菜单风格一致。
+| 模块路径 | 主要职责与核心逻辑 |
+| :--- | :--- |
+| **`main.rs`** | 解析 `clap` 命令行参数并进行子命令路由分发（`start` / `stop` / `status` / `completions` 等）；`start` 支持 `--relogin` 与 `-y` 自动确认；`stop` 支持 `-d` 倒计时下播并自动隐藏终端光标。 |
+| **`auth/`** | 统一管理认证流程。`login.rs` 提供扫码、账号密码、短信及浏览器等多模式登录；`cookies.rs` 负责保存与读写 `cookies.json`（含 `room_id`、`sessdata`、`csrf_token`、`live_key`）；`session.rs` 处理凭证有效性检查。 |
+| **`api/`** | 封装对 B 站官方接口的原始 HTTP 请求。基于 `minreq` 同步 HTTP 库与 Edge 130 伪装 User-Agent，实现凭证获取、房间信息查询、推流开启/关闭及分区数据同步。 |
+| **`live/`** | 直播全生命周期管理。`manager.rs` 处理开播推流码获取、写入 `stream_info.txt` 以及下播操作；`stats.rs` 在下播后调用 `StopLiveData` 统计接口，格式化输出时长、弹幕、粉丝增量等数据。 |
+| **`ui/`** | 命令行交互界面组件。`area_selector.rs` 采用 `dialoguer::Select` 实现优雅的两级分区选择器；`prompts.rs` 提供统一的控制台彩色输出辅助宏。 |
+| **`utils/`** | 通用工具库。`qrcode.rs` 负责终端 ASCII 二维码渲染与本地 PNG 图片生成；`string.rs` 提供敏感推流码脱敏显示；`paths.rs` 管理跨平台数据存放路径（`~/.config/bt/` 或 `%APPDATA%/bt/`）。 |
 
 ## 构建与发布
 
