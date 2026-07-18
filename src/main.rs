@@ -191,6 +191,8 @@ fn run(args: Args) -> Result<()> {
                 user_info!("将在 {} 后自动下播，按 Ctrl+C 取消", d);
                 let total = secs;
                 let start = std::time::Instant::now();
+                let mut stdout = std::io::stdout();
+                let _ = crossterm::execute!(stdout, crossterm::cursor::Hide);
                 while start.elapsed().as_secs() < total {
                     let remaining = total - start.elapsed().as_secs();
                     let h = remaining / 3600;
@@ -200,6 +202,7 @@ fn run(args: Args) -> Result<()> {
                     std::io::stdout().flush().ok();
                     std::thread::sleep(std::time::Duration::from_secs(1));
                 }
+                let _ = crossterm::execute!(stdout, crossterm::cursor::Show);
                 print!("\r\x1b[K");
                 std::io::stdout().flush().ok();
                 user_info!("倒计时结束，准备关闭直播...");
@@ -356,6 +359,9 @@ fn parse_delay(input: &str) -> Result<u64> {
         if c.is_ascii_digit() {
             num.push(c);
         } else {
+            if num.is_empty() {
+                return Err(BiliLiveError::Parse(format!("无效的时间格式: 连续的单位或单位出现在数值之前 ({})", input)));
+            }
             let val: u64 = num
                 .parse()
                 .map_err(|_| BiliLiveError::Parse(format!("无效的时间数值: {}", input)))?;
@@ -364,9 +370,12 @@ fn parse_delay(input: &str) -> Result<u64> {
                 'h' | 'H' => total += val * 3600,
                 'm' | 'M' => total += val * 60,
                 's' | 'S' => total += val,
-                _ => return Err(BiliLiveError::Parse(format!("无效的时间单位: {}", c))),
+                _ => return Err(BiliLiveError::Parse(format!("无效的时间单位 '{}' (仅支持 h, m, s)", c))),
             }
         }
+    }
+    if !num.is_empty() {
+        return Err(BiliLiveError::Parse(format!("数值 '{}' 缺少时间单位 (例如 h, m, s)", num)));
     }
     if total == 0 {
         return Err(BiliLiveError::Parse(format!("无效的延迟时间: {}", input)));
@@ -384,4 +393,23 @@ fn ensure_login() -> Result<()> {
     auth::start_login()?;
     user_success!("登录成功！");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_delay() {
+        assert_eq!(parse_delay("30s").unwrap(), 30);
+        assert_eq!(parse_delay("5m").unwrap(), 300);
+        assert_eq!(parse_delay("2h").unwrap(), 7200);
+        assert_eq!(parse_delay("1h30m10s").unwrap(), 5410);
+
+        // 验证错误格式的处理
+        assert!(parse_delay("30").is_err());
+        assert!(parse_delay("30m45").is_err());
+        assert!(parse_delay("abc").is_err());
+        assert!(parse_delay("m30").is_err());
+    }
 }
