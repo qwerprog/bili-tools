@@ -30,8 +30,13 @@ brew install bt
 ### Linux (AUR)
 
 ```bash
+# 使用 yay
 yay -S bili-tools       # 稳定版
 yay -S bili-tools-git   # 最新 git 版
+
+# 或使用 paru
+paru -S bili-tools      # 稳定版
+paru -S bili-tools-git  # 最新 git 版
 ```
 
 ### Windows
