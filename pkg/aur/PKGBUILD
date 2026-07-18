@@ -1,6 +1,6 @@
 # Maintainer: QwerProg
 pkgname=bili-tools-git
-pkgver=0.1.3.r6.g263e2d6
+pkgver=0.1.5
 pkgrel=1
 pkgdesc="B站直播开播工具 — 命令行一键开播/下播"
 arch=('x86_64' 'aarch64')
