@@ -13,18 +13,18 @@ use dialoguer::{Input, Password, Select, theme::ColorfulTheme};
 pub fn start_login() -> Result<()> {
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("选择一种登录方式")
-        .default(2)
-        .item("账号密码")
-        .item("短信登录")
+        .default(1)
         .item("扫码登录")
+        .item("短信登录")
+        .item("账号密码")
         .item("浏览器登录")
         .interact()
         .map_err(|e| crate::error::BiliLiveError::Input(format!("选择登录方式失败: {e}")))?;
 
     match selection {
-        0 => login_by_password_flow(),
+        0 => login_by_qrcode(),
         1 => login_by_sms_flow(),
-        2 => login_by_qrcode(),
+        2 => login_by_password_flow(),
         3 => login_by_browser(),
         _ => Ok(()),
     }
