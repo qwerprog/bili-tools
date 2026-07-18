@@ -110,6 +110,14 @@ fn main() {
     let args = Args::parse();
     init_logger();
 
+    // 监听 Ctrl+C 信号，确保程序被中断时能恢复终端光标和原始模式
+    let _ = ctrlc::set_handler(move || {
+        let mut stdout = std::io::stdout();
+        let _ = crossterm::execute!(stdout, crossterm::cursor::Show);
+        let _ = crossterm::terminal::disable_raw_mode();
+        std::process::exit(130);
+    });
+
     if let Err(e) = run(args) {
         user_error!("{}", e);
         std::process::exit(1);
