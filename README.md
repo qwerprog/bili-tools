@@ -27,7 +27,7 @@ brew install bt
 
 > Homebrew 会从源码编译，首次需要 Rust 工具链，`brew` 会自动安装。
 
-### Linux (AUR)
+### Arch Linux (AUR)
 
 ```bash
 # 使用 yay
