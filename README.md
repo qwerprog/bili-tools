@@ -28,12 +28,10 @@ brew install QwerProg/bili-tools/bt
 
 ```bash
 # 使用 yay
-yay -S bili-tools-bin   # 稳定版 (推荐，直接下载预编译二进制)
-yay -S bili-tools-git   # 最新 git 版 (从源码编译)
+yay -S bili-tools-bin
 
 # 或使用 paru
-paru -S bili-tools-bin  # 稳定版 (推荐，直接下载预编译二进制)
-paru -S bili-tools-git  # 最新 git 版 (从源码编译)
+paru -S bili-tools-bin
 ```
 
 ### Windows
