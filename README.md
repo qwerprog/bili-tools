@@ -97,12 +97,12 @@ bt start --area 398 --title "晚上随便播会儿" --show
 Usage: bt <COMMAND> [OPTION]
 
 Commands:
-  start    开始直播 (默认支持交互式选择)
-  stop     停止直播
-  status   查看当前直播状态
+  start        开始直播 (默认支持交互式选择)
+  stop         停止直播
+  status       查看当前直播状态
   completions  生成 shell 补全脚本
-  help     显示帮助信息
-  version  显示版本号
+  help         显示帮助信息
+  version      显示版本号
 
 提示：查看子命令参数请使用 `bt <command> -h`。例如 `bt start -h`。
 ```
