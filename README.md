@@ -21,8 +21,7 @@ cargo install --path .
 ### macOS (Homebrew)
 
 ```bash
-brew tap QwerProg/bili-tools
-brew install bt
+brew install QwerProg/bili-tools/bt
 ```
 
 ### Arch Linux (AUR)
