@@ -25,8 +25,6 @@ brew tap QwerProg/bili-tools
 brew install bt
 ```
 
-> Homebrew 会从源码编译，首次需要 Rust 工具链，`brew` 会自动安装。
-
 ### Arch Linux (AUR)
 
 ```bash

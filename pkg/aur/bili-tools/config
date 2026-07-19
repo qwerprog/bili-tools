@@ -1,0 +1,9 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = true
+[remote "origin"]
+	url = file:///home/chapman/Programming/rust/bili-tools/pkg/aur/../..
+	tagOpt = --no-tags
+	fetch = +refs/*:refs/*
+	mirror = true
