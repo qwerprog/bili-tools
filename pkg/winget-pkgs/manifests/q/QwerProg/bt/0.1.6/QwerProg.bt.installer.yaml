@@ -1,14 +1,5 @@
 PackageIdentifier: QwerProg.bt
 PackageVersion: 0.1.6
-PackageLocale: en-US
-PackageName: bt
-Publisher: QwerProg
-License: MIT
-ShortDescription: B站直播开播工具 — 命令行一键开播/下播
-Tags:
-  - bilibili
-  - live
-  - stream
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/QwerProg/bili-tools/releases/download/v0.1.6/bt-x86_64-windows.zip
@@ -26,5 +17,5 @@ Installers:
       - RelativeFilePath: bt.exe
         PortableCommandAlias: bt
     InstallerSha256: 4104ab29eb74ddce50b081a967f8506470b52b6aba5c1a5e34fa720145cc9b6a
-ManifestType: singleton
+ManifestType: installer
 ManifestVersion: 1.9.0
