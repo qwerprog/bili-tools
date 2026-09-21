@@ -1,6 +1,6 @@
-# bili-tools
+# bili-tools (`bt`)
 
-B站直播开播工具，命令行一键开播/下播。
+B站终端多功能工具箱，提供开播下播、账号管理、视频检索、个人数据（收藏夹/历史/稍后再看）等丰富命令行功能。
 
 ## 安装
 
@@ -61,47 +61,72 @@ scoop update bt
 #### 手动下载
 从 [Releases](https://github.com/QwerProg/bili-tools/releases) 下载 `bt-x86_64-windows.zip`，解压后即可运行。
 
-## 使用
+## 快速使用
 
 ```bash
-bt start                      # 开播（默认，交互式）
-bt start -y                   # 自动同意所有确认
-bt start -r                   # 清除登录并重新登录后开播
-bt start -a 398 -t "标题" -s   # 快捷参数
-bt stop                       # 下播
-bt stop -d 30m                # 30分钟后下播（阻塞进程，Ctrl+C 取消）
-bt status                     # 查看直播状态
-bt completions zsh --install  # 安装 Tab 补全
+# 账号管理
+bt auth login                  # 扫码登录
+bt auth status                 # 查看登录状态、UID、硬币、会员到期等
+bt auth logout                 # 退出登录并清除凭证
+
+# 直播模块
+bt live start                  # 交互式开播
+bt live start -a 398 -t "标题" # 指定分区与标题直接开播
+bt live stop                   # 立即下播
+bt live stop -d 30m            # 30分钟后下播（Ctrl+C 取消）
+bt live status                 # 查看直播状态
+bt live following              # 查看已关注主播的开播情况
+bt live title "新标题"         # 查看或修改直播标题
+bt live area -k "游戏"         # 搜索或切换直播分区
+
+# 搜索发现
+bt search hot                  # 查看实时热搜榜
+bt search video "Rust"         # 搜索视频（WBI 签名加密鉴权）
+bt search user "老番茄"        # 搜索 UP 主
+bt search live "自习室"        # 搜索直播间
+
+# 视频互动
+bt video info BV1hp4y1k7SV     # 查看视频详情（播放/弹幕/分P列表）
+bt video like BV1hp4y1k7SV     # 点赞
+bt video coin BV1hp4y1k7SV     # 投币
+bt video triple BV1hp4y1k7SV   # 一键三连
+
+# 个人数据
+bt fav list                    # 列出所有收藏夹
+bt fav show <收藏夹ID>         # 查看指定收藏夹内容
+bt fav export <ID> --format csv# 导出收藏夹（支持 csv/json/text）
+bt later list                  # 查看稍后再看列表
+bt later add BV1hp4y1k7SV      # 添加到稍后再看
+bt history list --limit 10     # 查看最近观看历史
+
+# 通用选项
+bt --json search hot           # 机器可读 JSON 输出（支持所有查询子命令）
+bt -q live status              # 静默模式
+
+# Shell 补全
+bt completions zsh --install   # 自动安装 Tab 自动补全
 ```
 
-### 开播参数
-
-| 参数 | 说明 |
-|---|---|
-| `-a, --area <ID>` | 指定分区 ID，跳过交互式选择 |
-| `-t, --title <标题>` | 指定直播标题，跳过输入 |
-| `-s, --show` | 显示完整推流码（默认打码） |
-| `-r, --relogin` | 清除登录并重新登录后开播 |
-
-```bash
-# 非交互式一键开播
-bt start --area 398 --title "晚上随便播会儿" --show
-```
-
-### 完整参数
+### 命令架构
 
 ```
-Usage: bt <COMMAND> [OPTION]
+Usage: bt [OPTIONS] <COMMAND>
 
 Commands:
-  start        开始直播 (默认支持交互式选择)
-  stop         停止直播
-  status       查看当前直播状态
-  completions  生成 shell 补全脚本
-  help         显示帮助信息
-  version      显示版本号
+  auth         账号与认证管理 (login, status, logout, refresh)
+  live         直播间管理与开播 (start, stop, status, title, area, following)
+  search       内容与用户搜索 (video, user, live, hot)
+  video        视频操作 (info, like, coin, triple)
+  fav          收藏夹管理 (list, show, export)
+  later        稍后再看管理 (list, add, clear)
+  history      观看历史记录 (list)
+  completions  生成 shell 自动补全脚本 (bash, zsh, fish)
 
-提示：查看子命令参数请使用 `bt <command> -h`。例如 `bt start -h`。
+Options:
+      --json   以 JSON 格式输出结果
+  -q, --quiet  静默模式，不输出提示信息
+  -h, --help   显示帮助
+  -V, --version 显示版本号
 ```
 
 ## 交互流程
@@ -175,65 +200,73 @@ Linux/macOS 上，数据目录权限为 `0700`，Cookie 和推流信息文件为
 
 ```mermaid
 graph TD
-    main --> auth
-    main --> api
-    main --> live
-    main --> ui
+    main --> cli
+    cli --> auth_cli[cli::auth]
+    cli --> live_cli[cli::live]
+    cli --> search_cli[cli::search]
+    cli --> video_cli[cli::video]
+    cli --> fav_cli[cli::fav]
+    cli --> later_cli[cli::later]
+    cli --> history_cli[cli::history]
 
-    auth --> cookies
-    auth --> login
-    auth --> session
+    auth_cli --> auth
+    auth_cli --> passport[api::passport]
+    live_cli --> live
+    live_cli --> live_api[api::live]
+    search_cli --> search_api[api::search]
+    video_cli --> video_api[api::video]
+    fav_cli --> fav_api[api::fav]
+    history_cli --> history_api[api::history]
 
-    api --> passport
-    api --> live_api[live]
-    api --> area
-    api --> client
-
-    live --> manager
-    live --> stats
-
-    ui --> area_selector
-    ui --> prompts
-
-    utils --> qrcode_util[qrcode]
-    utils --> string
-
-    start_cmd["start --relogin"] --> auth
+    search_api --> wbi[api::wbi]
+    video_api --> wbi
 ```
 
 ```
 src/
-├── main.rs               # 入口与命令分发
-├── api/
-│   ├── client.rs         # 公共 User-Agent 常量
-│   ├── passport.rs       # 二维码生成/轮询、room_id 查询
-│   ├── live.rs           # 直播状态查询、分区查询、标题更新
-│   └── area.rs           # 拉取全量分区列表
-├── auth/
-│   ├── login.rs          # 登录流程（含账号密码/短信/扫码/浏览器）
-│   ├── cookies.rs        # cookies.json 读写管理
-│   └── session.rs        # 登录状态验证
-├── live/
-│   ├── manager.rs        # 开播/下播（调用 B站 API，写 stream_info.txt）
-│   └── stats.rs          # 下播后拉取直播统计数据
-├── ui/
+├── main.rs               # 主程序入口与初始化
+├── cli/                  # CLI 子命令定义与终端交互
+│   ├── args.rs           # Clap 命令行定义 (多级子命令)
+│   ├── output.rs         # 全局 --json / --quiet 状态控制
+│   ├── auth.rs           # bt auth 命令实现
+│   ├── live.rs           # bt live 命令实现 (开播/下播/状态/关注)
+│   ├── search.rs         # bt search 命令实现 (视频/用户/直播/热搜)
+│   ├── video.rs          # bt video 命令实现 (详情/点赞/投币/三连)
+│   ├── fav.rs            # bt fav 命令实现 (列表/详情/导出)
+│   ├── later.rs          # bt later 命令实现 (稍后再看)
+│   ├── history.rs        # bt history 命令实现 (历史记录)
+│   └── completions.rs    # bt completions Shell 补全
+├── api/                  # 官方接口请求封装
+│   ├── wbi.rs            # WBI 鉴权加密与密钥缓存
+│   ├── client.rs         # 通用 HTTP 请求头配置
+│   ├── passport.rs       # 登录、Token刷新、用户信息、退出登录
+│   ├── live.rs           # 直播状态、开下播、分区、关注状态
+│   ├── search.rs         # 综合/视频/用户/直播搜索与热搜
+│   ├── video.rs          # 视频详情、点赞、投币、三连
+│   ├── fav.rs            # 收藏夹列表、明细与全量资源分页
+│   └── history.rs        # 观看历史与稍后再看列表
+├── auth/                 # 凭据管理与持久化
+│   ├── cookies.rs        # cookies.json 读写管理 (0600权限、buvid指纹)
+│   ├── login.rs          # 登录流程 (扫码/短信/密码)
+│   └── session.rs        # 登录态验证与保证
+├── live/                 # 直播核心业务
+│   ├── manager.rs        # 开播推流码获取、写入 stream_info.txt 与下播
+│   └── stats.rs          # 下播统计数据拉取
+├── ui/                   # 终端 UI 渲染
 │   ├── area_selector.rs  # dialoguer 两级分区选择器
-│   └── prompts.rs        # 输出宏
-└── utils/
-    ├── qrcode.rs         # 终端 ASCII 二维码 + PNG 保存
-    └── string.rs         # 推流码打码
+│   └── prompts.rs        # 输出高亮宏
+└── utils/                # 工具函数 (二维码渲染/推流码脱敏/路径)
 ```
 
 ### 模块说明
 
 | 模块路径 | 主要职责与核心逻辑 |
 | :--- | :--- |
-| **`main.rs`** | 解析 `clap` 命令行参数并进行子命令路由分发（`start` / `stop` / `status` / `completions` 等）；`start` 支持 `--relogin` 与 `-y` 自动确认；`stop` 支持 `-d` 倒计时下播并自动隐藏终端光标。 |
-| **`auth/`** | 统一管理认证流程。`login.rs` 提供扫码、账号密码、短信及浏览器等多模式登录；`cookies.rs` 负责保存与读写 `cookies.json`（含 `room_id`、`sessdata`、`csrf_token`、`live_key`）；`session.rs` 处理凭证有效性检查。 |
-| **`api/`** | 封装对 B 站官方接口的原始 HTTP 请求。基于 `minreq` 同步 HTTP 库与 Edge 130 伪装 User-Agent，实现凭证获取、房间信息查询、推流开启/关闭及分区数据同步。 |
-| **`live/`** | 直播全生命周期管理。`manager.rs` 处理开播推流码获取、写入 `stream_info.txt` 以及下播操作；`stats.rs` 在下播后调用 `StopLiveData` 统计接口，格式化输出时长、弹幕、粉丝增量等数据。 |
-| **`ui/`** | 命令行交互界面组件。`area_selector.rs` 采用 `dialoguer::Select` 实现优雅的两级分区选择器；`prompts.rs` 提供统一的控制台彩色输出辅助宏。 |
-| **`utils/`** | 通用工具库。`qrcode.rs` 负责终端 ASCII 二维码渲染与本地 PNG 图片生成；`string.rs` 提供敏感推流码脱敏显示；`paths.rs` 管理跨平台数据存放路径（`~/.config/bt/` 或 `%APPDATA%/bt/`）。 |
+| **`cli/`** | 统一管理 CLI 参数分发。各个子模块专注于自身的人机交互、美化表格排版与 `--json` 格式化。 |
+| **`api/wbi.rs`** | 完整实现 B 站官方 WBI 签名算法，提供每日密钥轮询缓存与特殊字符转义大写，确保搜索和详情接口稳定通过风控。 |
+| **`auth/`** | 凭证仓库。`cookies.rs` 保存完整 Cookie 集合（`DedeUserID`、`SESSDATA`、`bili_jct`、`buvid3/4`、`refresh_token` 等），并自动以 `0600` 权限落地文件。 |
+| **`live/`** | 直播全生命周期。涵盖交互/非交互开播、推流码安全打码、延迟下播倒计时、下播统计数据展示与关注主播实时开播列表。 |
+| **`api/`** | 对 B 站官方接口的无状态 HTTP 请求层，支持分页递归、自动参数签名与响应结构体反序列化。 |
 
 ## 构建与发布
 

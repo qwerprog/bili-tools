@@ -51,6 +51,11 @@ pub fn write_private(path: &Path, contents: &[u8]) -> io::Result<()> {
     file.write_all(contents)?;
     file.as_file().sync_all()?;
     file.persist(path).map_err(|e| e.error)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    }
     Ok(())
 }
 

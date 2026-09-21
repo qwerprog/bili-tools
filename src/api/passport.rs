@@ -55,18 +55,22 @@ fn ts() -> String {
         .to_string()
 }
 
-// 从登录响应 JSON 中提取 SESSDATA 和 bili_jct
-fn extract_credentials(json: &Value) -> Result<(String, String)> {
+// 从登录响应 JSON 中提取凭证
+fn extract_credentials(json: &Value) -> Result<(String, String, String, String, String)> {
     let cookies = json["data"]["cookie_info"]["cookies"]
         .as_array()
         .ok_or_else(|| BiliLiveError::Parse("缺少 cookie_info".to_string()))?;
 
     let mut sessdata = String::new();
     let mut csrf_token = String::new();
+    let mut dede_user_id = String::new();
+    let mut dede_user_id_ck_md5 = String::new();
     for cookie in cookies {
         match cookie["name"].as_str() {
             Some("SESSDATA") => sessdata = cookie["value"].as_str().unwrap_or("").to_string(),
             Some("bili_jct") => csrf_token = cookie["value"].as_str().unwrap_or("").to_string(),
+            Some("DedeUserID") => dede_user_id = cookie["value"].as_str().unwrap_or("").to_string(),
+            Some("DedeUserID__ckMd5") => dede_user_id_ck_md5 = cookie["value"].as_str().unwrap_or("").to_string(),
             _ => {}
         }
     }
@@ -74,7 +78,13 @@ fn extract_credentials(json: &Value) -> Result<(String, String)> {
     if sessdata.is_empty() || csrf_token.is_empty() {
         return Err(BiliLiveError::Parse("无法提取登录凭证".to_string()));
     }
-    Ok((sessdata, csrf_token))
+    let refresh_token = json["data"]["refresh_token"]
+        .as_str()
+        .or_else(|| json["data"]["token_info"]["refresh_token"].as_str())
+        .unwrap_or("")
+        .to_string();
+
+    Ok((sessdata, csrf_token, dede_user_id, dede_user_id_ck_md5, refresh_token))
 }
 
 // ── TV 扫码登录（二维码更短，相比 Web API 更易扫描）────────────────
@@ -137,6 +147,9 @@ pub enum PollStatus {
     Success {
         sessdata: String,
         csrf_token: String,
+        dede_user_id: String,
+        dede_user_id_ck_md5: String,
+        refresh_token: String,
     },
 }
 
@@ -166,10 +179,14 @@ pub fn poll_qr_status(auth_code: &str) -> Result<PollStatus> {
 fn parse_tv_poll(json: &Value) -> Result<PollStatus> {
     match json["code"].as_i64() {
         Some(0) => {
-            let (sessdata, csrf_token) = extract_credentials(json)?;
+            let (sessdata, csrf_token, dede_user_id, dede_user_id_ck_md5, refresh_token) =
+                extract_credentials(json)?;
             Ok(PollStatus::Success {
                 sessdata,
                 csrf_token,
+                dede_user_id,
+                dede_user_id_ck_md5,
+                refresh_token,
             })
         }
         Some(86039) => Ok(PollStatus::Waiting),
@@ -270,9 +287,37 @@ fn parse_web_poll(json: &Value, headers: &ureq::http::HeaderMap) -> Result<PollS
                         BiliLiveError::Parse(format!("登录响应的 Cookie 和 URL 均缺少 {name}"))
                     })
             };
+            let opt_credential = |name: &str| -> Option<String> {
+                headers
+                    .get_all(ureq::http::header::SET_COOKIE)
+                    .iter()
+                    .filter_map(|header| header.to_str().ok())
+                    .filter_map(|header| header.split(';').next()?.split_once('='))
+                    .filter(|(key, value)| key.trim() == name && !value.trim().is_empty())
+                    .map(|(_, value)| value.trim().to_string())
+                    .next_back()
+                    .or_else(|| {
+                        url.as_ref()?
+                            .query_pairs()
+                            .find(|(key, value)| key == name && !value.is_empty())
+                            .map(|(_, value)| value.into_owned())
+                    })
+            };
+            let sessdata = credential("SESSDATA")?;
+            let csrf_token = credential("bili_jct")?;
+            let dede_user_id = opt_credential("DedeUserID").unwrap_or_default();
+            let dede_user_id_ck_md5 = opt_credential("DedeUserID__ckMd5").unwrap_or_default();
+            let refresh_token = data["refresh_token"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+
             Ok(PollStatus::Success {
-                sessdata: credential("SESSDATA")?,
-                csrf_token: credential("bili_jct")?,
+                sessdata,
+                csrf_token,
+                dede_user_id,
+                dede_user_id_ck_md5,
+                refresh_token,
             })
         }
         _ => Err(BiliLiveError::Api(format!(
@@ -312,7 +357,10 @@ fn get_key() -> Result<(String, String)> {
 }
 
 // 使用 B站 Android API 进行账号密码登录
-pub fn login_by_password(username: &str, password: &str) -> Result<(String, String)> {
+pub fn login_by_password(
+    username: &str,
+    password: &str,
+) -> Result<(String, String, String, String, String)> {
     let (hash, pub_key) = get_key()?;
     let pub_key = RsaPublicKey::from_public_key_pem(&pub_key)
         .map_err(|e| BiliLiveError::Parse(format!("解析公钥失败: {}", e)))?;
@@ -483,7 +531,10 @@ pub fn send_sms_with_recaptcha(
     Err(BiliLiveError::Api("短信发送返回未知结果".to_string()))
 }
 
-pub fn login_by_sms(code: u32, mut payload: Value) -> Result<(String, String)> {
+pub fn login_by_sms(
+    code: u32,
+    mut payload: Value,
+) -> Result<(String, String, String, String, String)> {
     payload["code"] = Value::from(code);
     let urlencoded = serde_urlencoded::to_string(&payload)
         .map_err(|e| BiliLiveError::Parse(format!("URL编码失败: {}", e)))?;
@@ -561,6 +612,181 @@ pub fn get_roomid(sessdata: &str) -> Result<i32> {
     Ok(room_info.data.roomid as i32)
 }
 
+const REFRESH_PUBLIC_KEY_PEM: &str = r#"-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDLgd2OAkcGVtoE3ThUREbio0Eg
+Uc/prcajMKXvkCKFCWhJYJcLkcM2DKKcSeFpD/j6Boy538YXnR6VhcuUJOhH2x71
+nzPjfdTcqMz7djHum0qSZA0AyCBDABUqCrfNgCiJ00Ra7GmRj+YCK1NJEuewlb40
+JNrRuoEUXpabUzGB8QIDAQAB
+-----END PUBLIC KEY-----"#;
+
+pub fn get_user_info(cookies: &crate::auth::cookies::Cookies) -> Result<serde_json::Value> {
+    let response = crate::api::client::get("https://api.bilibili.com/x/web-interface/nav")
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Cookie", cookies.cookie_header())
+        .send()?;
+
+    let json: serde_json::Value = serde_json::from_str(response.as_str()?)?;
+    Ok(json)
+}
+
+pub fn logout(cookies: &crate::auth::cookies::Cookies) -> Result<()> {
+    if !cookies.sessdata.is_empty() {
+        let body = format!("biliCSRF={}", cookies.bili_jct);
+        let _ = crate::api::client::post("https://passport.bilibili.com/login/exit/v2")
+            .with_header("User-Agent", DEFAULT_USER_AGENT)
+            .with_header("Content-Type", "application/x-www-form-urlencoded")
+            .with_header("Cookie", cookies.cookie_header())
+            .with_body(body)
+            .send();
+    }
+    crate::auth::cookies::delete_cookies()?;
+    Ok(())
+}
+
+pub fn check_cookie_need_refresh(cookies: &crate::auth::cookies::Cookies) -> Result<(bool, i64)> {
+    let url = format!(
+        "https://passport.bilibili.com/x/passport-login/web/cookie/info?csrf={}",
+        cookies.bili_jct
+    );
+    let response = crate::api::client::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Cookie", cookies.cookie_header())
+        .send()?;
+
+    let json: Value = serde_json::from_str(response.as_str()?)?;
+    if json["code"].as_i64() != Some(0) {
+        return Err(BiliLiveError::Api(format!(
+            "检查 Cookie 刷新状态失败: {}",
+            json["message"].as_str().unwrap_or("未知错误")
+        )));
+    }
+
+    let refresh = json["data"]["refresh"].as_bool().unwrap_or(false);
+    let ts = json["data"]["timestamp"].as_i64().unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64
+    });
+
+    Ok((refresh, ts))
+}
+
+pub fn get_correspond_path(timestamp: i64) -> Result<String> {
+    use rsa::Oaep;
+    let pub_key = RsaPublicKey::from_public_key_pem(REFRESH_PUBLIC_KEY_PEM)
+        .map_err(|e| BiliLiveError::Parse(format!("解析刷新公钥失败: {e}")))?;
+    let mut rng = OsRng;
+    let msg = format!("refresh_{timestamp}");
+    let enc = pub_key
+        .encrypt(&mut rng, Oaep::new::<sha2::Sha256>(), msg.as_bytes())
+        .map_err(|e| BiliLiveError::Parse(format!("加密对应路径失败: {e}")))?;
+    let hex = enc.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+    Ok(hex)
+}
+
+pub fn get_refresh_csrf(correspond_path: &str, sessdata: &str) -> Result<String> {
+    let url = format!("https://www.bilibili.com/correspond/1/{correspond_path}");
+    let response = crate::api::client::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Cookie", format!("SESSDATA={sessdata}"))
+        .send()?;
+
+    let html = response.as_str()?;
+    if let Some(start) = html.find("<div id=\"1-name\">") {
+        let rest = &html[start + "<div id=\"1-name\">".len()..];
+        if let Some(end) = rest.find("</div>") {
+            let token = rest[..end].trim();
+            if !token.is_empty() {
+                return Ok(token.to_string());
+            }
+        }
+    }
+    Err(BiliLiveError::Api("未能从对应页面提取 refresh_csrf".to_string()))
+}
+
+pub fn refresh_cookie(cookies: &mut crate::auth::cookies::Cookies) -> Result<()> {
+    if cookies.refresh_token.is_empty() {
+        return Err(BiliLiveError::Api(
+            "缺少 refresh_token，无法自动刷新 Cookie，请使用扫码重新登录".to_string(),
+        ));
+    }
+
+    let (_, ts) = check_cookie_need_refresh(cookies)?;
+    let correspond_path = get_correspond_path(ts)?;
+    let refresh_csrf = get_refresh_csrf(&correspond_path, &cookies.sessdata)?;
+    let old_refresh_token = cookies.refresh_token.clone();
+
+    let body = format!(
+        "csrf={}&refresh_csrf={}&source=main_web&refresh_token={}",
+        cookies.bili_jct, refresh_csrf, old_refresh_token
+    );
+
+    let mut response = ureq::post("https://passport.bilibili.com/x/passport-login/web/cookie/refresh")
+        .header("User-Agent", DEFAULT_USER_AGENT)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", &cookies.cookie_header())
+        .config()
+        .timeout_global(Some(std::time::Duration::from_secs(30)))
+        .max_redirects(0)
+        .build()
+        .send(&body)?;
+
+    let headers = response.headers().clone();
+    let resp_body = response.body_mut().read_to_string()?;
+    let json: Value = serde_json::from_str(&resp_body)?;
+
+    if json["code"].as_i64() != Some(0) {
+        return Err(BiliLiveError::Api(format!(
+            "刷新 Cookie 失败: {}",
+            json["message"].as_str().unwrap_or("未知错误")
+        )));
+    }
+
+    let new_refresh_token = json["data"]["refresh_token"]
+        .as_str()
+        .ok_or_else(|| BiliLiveError::Parse("缺少新的 refresh_token".to_string()))?
+        .to_string();
+
+    for header in headers.get_all(ureq::http::header::SET_COOKIE) {
+        if let Ok(val) = header.to_str()
+            && let Some(first_part) = val.split(';').next()
+            && let Some((k, v)) = first_part.split_once('=')
+        {
+            match k.trim() {
+                "SESSDATA" => cookies.sessdata = v.trim().to_string(),
+                "bili_jct" => cookies.bili_jct = v.trim().to_string(),
+                "DedeUserID" => cookies.dede_user_id = v.trim().to_string(),
+                "DedeUserID__ckMd5" => cookies.dede_user_id_ck_md5 = v.trim().to_string(),
+                _ => {}
+            }
+        }
+    }
+
+    let confirm_body = format!(
+        "csrf={}&refresh_token={}",
+        cookies.bili_jct, old_refresh_token
+    );
+    let confirm_resp = crate::api::client::post("https://passport.bilibili.com/x/passport-login/web/confirm/refresh")
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Content-Type", "application/x-www-form-urlencoded")
+        .with_header("Cookie", cookies.cookie_header())
+        .with_body(confirm_body)
+        .send()?;
+
+    let confirm_json: Value = serde_json::from_str(confirm_resp.as_str()?)?;
+    if confirm_json["code"].as_i64() != Some(0) {
+        return Err(BiliLiveError::Api(format!(
+            "确认刷新失败: {}",
+            confirm_json["message"].as_str().unwrap_or("未知错误")
+        )));
+    }
+
+    cookies.refresh_token = new_refresh_token;
+    cookies.save()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -609,6 +835,7 @@ mod tests {
         let PollStatus::Success {
             sessdata,
             csrf_token,
+            ..
         } = parse_web_poll(&response, &ureq::http::HeaderMap::new()).unwrap()
         else {
             panic!("expected success")
@@ -642,6 +869,7 @@ mod tests {
             let PollStatus::Success {
                 sessdata,
                 csrf_token,
+                ..
             } = parse_web_poll(&response, &headers).unwrap()
             else {
                 panic!("expected success")
@@ -684,6 +912,7 @@ mod tests {
         let PollStatus::Success {
             sessdata,
             csrf_token,
+            ..
         } = result
         else {
             panic!("expected success")
@@ -705,5 +934,12 @@ mod tests {
             PollStatus::Success { .. }
         ));
         assert!(parse_tv_poll(&json!({"code":0,"data":{}})).is_err());
+    }
+
+    #[test]
+    fn test_correspond_path_generation() {
+        let ts = 1684466082562;
+        let path = get_correspond_path(ts).unwrap();
+        assert_eq!(path.len(), 256);
     }
 }
