@@ -48,7 +48,7 @@ pub fn update_title(cookies: &Cookies, title: &str) -> Result<()> {
     let response = crate::api::client::post("https://api.live.bilibili.com/room/v1/Room/update")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/x-www-form-urlencoded")
-        .with_header("Cookie", format!("SESSDATA={}", cookies.sessdata))
+        .with_header("Cookie", cookies.cookie_header())
         .with_body(form)
         .send()?;
 
@@ -62,12 +62,55 @@ pub fn update_title(cookies: &Cookies, title: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn get_room_info(room_id: i32) -> Result<serde_json::Value> {
+    let url = format!(
+        "https://api.live.bilibili.com/room/v1/Room/get_info?room_id={}",
+        room_id
+    );
+    let response = crate::api::client::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .send()?;
+
+    let json: serde_json::Value = serde_json::from_str(response.as_str()?)?;
+    if json["code"].as_i64() != Some(0) {
+        return Err(BiliLiveError::Api(format!(
+            "获取直播间信息失败: {}",
+            json["message"].as_str().unwrap_or("未知错误")
+        )));
+    }
+    Ok(json["data"].clone())
+}
+
+pub fn get_following_live(
+    cookies: &Cookies,
+    page: u32,
+    page_size: u32,
+) -> Result<serde_json::Value> {
+    let url = format!(
+        "https://api.live.bilibili.com/xlive/web-ucenter/user/following?page={}&page_size={}&ignoreRecord=1&hit_ab=true",
+        page, page_size
+    );
+    let response = crate::api::client::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Cookie", cookies.cookie_header())
+        .send()?;
+
+    let json: serde_json::Value = serde_json::from_str(response.as_str()?)?;
+    if json["code"].as_i64() != Some(0) {
+        return Err(BiliLiveError::Api(format!(
+            "获取关注直播列表失败: {}",
+            json["message"].as_str().unwrap_or("未知错误")
+        )));
+    }
+    Ok(json["data"].clone())
+}
+
 fn title_form(cookies: &Cookies, title: &str) -> Result<String> {
     serde_urlencoded::to_string([
         ("room_id", cookies.room_id.to_string()),
         ("title", title.to_string()),
-        ("csrf_token", cookies.csrf_token.clone()),
-        ("csrf", cookies.csrf_token.clone()),
+        ("csrf_token", cookies.bili_jct.clone()),
+        ("csrf", cookies.bili_jct.clone()),
     ])
     .map_err(|e| BiliLiveError::Parse(format!("表单编码失败: {e}")))
 }
@@ -81,8 +124,8 @@ mod tests {
         let cookies = Cookies {
             room_id: 1,
             sessdata: String::new(),
-            csrf_token: "test".into(),
-            live_key: None,
+            bili_jct: "test".into(),
+            ..Default::default()
         };
         let title = "C++ & 聊天=游戏 100%20完成";
         let fields: Vec<(String, String)> =

@@ -1,38 +1,26 @@
 use crate::api::client::DEFAULT_USER_AGENT;
 use crate::auth::cookies::read_cookies;
-use crate::error::{BiliLiveError, Result};
-use crate::utils::paths::data_file;
-use crate::{user_info, user_warning};
+use crate::error::Result;
 
+/// 校验当前保存的 Cookie 登录态是否有效（静默网络校验）
+#[allow(dead_code)]
 pub fn check_status() -> Result<bool> {
-    user_info!("检查登录状态...");
-    let cookie_path = data_file("cookies.json")?;
-    if !cookie_path.exists() {
-        user_warning!("cookies.json文件不存在");
+    let Ok(cookies) = read_cookies() else {
+        return Ok(false);
+    };
+    if cookies.sessdata.is_empty() {
         return Ok(false);
     }
-    if std::fs::read_to_string(&cookie_path)
-        .map_err(BiliLiveError::Io)?
-        .is_empty()
-    {
-        user_warning!("cookies.json文件为空");
-        return Ok(false);
-    }
-    let sessdata = read_cookies()?.sessdata;
+
     let response = crate::api::client::get("https://api.bilibili.com/x/web-interface/nav")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
-        .with_header("Cookie", format!("SESSDATA={}", sessdata))
+        .with_header("Cookie", cookies.cookie_header())
         .send()?;
 
     let response_text = response.as_str()?;
     let response_json: serde_json::Value = serde_json::from_str(response_text)?;
-    let code = response_json["code"]
-        .as_i64()
-        .ok_or_else(|| BiliLiveError::Parse("无法解析响应码".to_string()))?;
-    if code == 0 {
-        Ok(true)
-    } else {
-        user_warning!("登录状态异常");
-        Ok(false)
-    }
+    let code = response_json["code"].as_i64().unwrap_or(-1);
+    let is_login = response_json["data"]["isLogin"].as_bool().unwrap_or(false);
+
+    Ok(code == 0 && is_login)
 }

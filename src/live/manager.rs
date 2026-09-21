@@ -1,5 +1,6 @@
 use crate::api::client::DEFAULT_USER_AGENT;
 use crate::auth::cookies::{read_cookies, update_live_key};
+use crate::cli::output::{is_json, is_quiet};
 use crate::error::{BiliLiveError, Result};
 use crate::live::stats::get_live_info;
 use crate::user_warning;
@@ -7,18 +8,18 @@ use crate::utils::paths::{data_file, write_private};
 use crate::utils::string::mask_rtmp_code;
 
 // 调用 B站 API 开始直播，获取推流地址和推流码
-pub fn start_live(area_id: &str, show_full_code: bool) -> Result<()> {
+pub fn start_live(area_id: &str, show_full_code: bool) -> Result<serde_json::Value> {
     let cookies = read_cookies()?;
 
     let form_data = format!(
         "room_id={}&area_v2={}&csrf={}&platform=pc_link",
-        cookies.room_id, area_id, cookies.csrf_token
+        cookies.room_id, area_id, cookies.bili_jct
     );
 
     let response = crate::api::client::post("https://api.live.bilibili.com/room/v1/Room/startLive")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/x-www-form-urlencoded")
-        .with_header("Cookie", format!("SESSDATA={}", cookies.sessdata))
+        .with_header("Cookie", cookies.cookie_header())
         .with_header("platform", "web_electron_link")
         .with_body(form_data)
         .send()?;
@@ -40,28 +41,34 @@ pub fn start_live(area_id: &str, show_full_code: bool) -> Result<()> {
     let rtmp_code = res["data"]["rtmp"]["code"].as_str().ok_or_else(|| {
         BiliLiveError::Parse("直播已开启，但响应缺少推流码，请到直播中心获取".to_string())
     })?;
-    use crossterm::style::Stylize;
-    println!();
-    println!("{}", "🎬 直播已开启".green());
-    println!("  {:>8}  {}", "推流地址".dark_grey(), rtmp_addr);
-    if show_full_code {
-        println!("  {:>8}  {}", "推流码".dark_grey(), rtmp_code);
-    } else {
-        println!(
-            "  {:>8}  {}",
-            "推流码".dark_grey(),
-            mask_rtmp_code(rtmp_code)
-        );
+
+    if !is_json() && !is_quiet() {
+        use crossterm::style::Stylize;
+        println!();
+        println!("{}", "🎬 直播已开启".green());
+        println!("  {:>8}  {}", "推流地址".dark_grey(), rtmp_addr);
+        if show_full_code {
+            println!("  {:>8}  {}", "推流码".dark_grey(), rtmp_code);
+        } else {
+            println!(
+                "  {:>8}  {}",
+                "推流码".dark_grey(),
+                mask_rtmp_code(rtmp_code)
+            );
+        }
     }
 
     let save_stream = || -> Result<()> {
         let path = data_file("stream_info.txt")?;
         write_private(&path, format!("{rtmp_addr}\n{rtmp_code}\n").as_bytes())?;
-        println!(
-            "  {:>8}  {}",
-            "·".dark_grey(),
-            format!("推流信息已写入 {}", path.display()).dark_grey()
-        );
+        if !is_json() && !is_quiet() {
+            use crossterm::style::Stylize;
+            println!(
+                "  {:>8}  {}",
+                "·".dark_grey(),
+                format!("推流信息已写入 {}", path.display()).dark_grey()
+            );
+        }
         Ok(())
     };
     if let Err(e) = save_stream() {
@@ -72,7 +79,7 @@ pub fn start_live(area_id: &str, show_full_code: bool) -> Result<()> {
     }
 
     let live_key = parse_live_key(&res["data"]["live_key"]);
-    if live_key.is_none() {
+    if live_key.is_none() && !is_json() && !is_quiet() {
         user_warning!("直播已开启，但未取得有效统计标识，本次统计不可用");
     }
     // 缺失时清空旧标识，避免显示上一次直播的数据。
@@ -80,22 +87,29 @@ pub fn start_live(area_id: &str, show_full_code: bool) -> Result<()> {
         user_warning!("直播已开启，但统计标识保存失败: {}", e);
     }
 
-    Ok(())
+    Ok(serde_json::json!({
+        "success": true,
+        "room_id": cookies.room_id,
+        "area_id": area_id,
+        "rtmp_addr": rtmp_addr,
+        "rtmp_code": rtmp_code,
+        "live_key": live_key
+    }))
 }
 
 // 调用 B站 API 停止直播
-pub fn stop_live() -> Result<()> {
+pub fn stop_live() -> Result<serde_json::Value> {
     let cookies = read_cookies()?;
 
     let form_data = format!(
         "room_id={}&csrf={}&platform=web_electron_link",
-        cookies.room_id, cookies.csrf_token
+        cookies.room_id, cookies.bili_jct
     );
 
     let response = crate::api::client::post("https://api.live.bilibili.com/room/v1/Room/stopLive")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/x-www-form-urlencoded")
-        .with_header("Cookie", format!("SESSDATA={}", cookies.sessdata))
+        .with_header("Cookie", cookies.cookie_header())
         .with_body(form_data)
         .send()?;
 
@@ -109,16 +123,23 @@ pub fn stop_live() -> Result<()> {
         )));
     }
 
-    use crossterm::style::Stylize;
-    println!("{}", "🎬 直播已关闭".green());
+    if !is_json() && !is_quiet() {
+        use crossterm::style::Stylize;
+        println!("{}", "🎬 直播已关闭".green());
 
-    if let Some(live_key) = cookies.live_key
-        && let Err(e) = get_live_info(live_key)
-    {
-        user_warning!("直播已关闭，但统计获取失败: {}", e);
+        if let Some(live_key) = cookies.live_key
+            && let Err(e) = get_live_info(live_key)
+        {
+            user_warning!("直播已关闭，但统计获取失败: {}", e);
+        }
     }
 
-    Ok(())
+    Ok(serde_json::json!({
+        "success": true,
+        "room_id": cookies.room_id,
+        "message": "直播已关闭",
+        "live_key": cookies.live_key
+    }))
 }
 
 fn parse_live_key(value: &serde_json::Value) -> Option<u64> {
