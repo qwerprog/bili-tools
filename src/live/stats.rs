@@ -12,7 +12,7 @@ pub fn get_live_info(live_id: u64) -> Result<()> {
         live_id
     );
 
-    let response = minreq::get(&url)
+    let response = crate::api::client::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/json, text/plain, */*")
         .with_header("Cookie", format!("SESSDATA={}", cookies.sessdata))
@@ -33,13 +33,34 @@ pub fn get_live_info(live_id: u64) -> Result<()> {
     println!("  {:>6}", "统计".dark_grey());
 
     let stats: &[(&str, String)] = &[
-        ("新增粉丝", data["AddFans"].as_i64().unwrap_or(0).to_string()),
-        ("弹幕数量", data["DanmuNum"].as_i64().unwrap_or(0).to_string()),
-        ("直播时长", format_duration(data["LiveTime"].as_i64().unwrap_or(0))),
-        ("最大在线", data["MaxOnline"].as_i64().unwrap_or(0).to_string()),
-        ("累计观看", data["WatchedCount"].as_i64().unwrap_or(0).to_string()),
-        ("粉丝勋章", data["NewFansClub"].as_i64().unwrap_or(0).to_string()),
-        ("金仓鼠", data["HamsterRmb"].as_i64().unwrap_or(0).to_string()),
+        (
+            "新增粉丝",
+            data["AddFans"].as_i64().unwrap_or(0).to_string(),
+        ),
+        (
+            "弹幕数量",
+            data["DanmuNum"].as_i64().unwrap_or(0).to_string(),
+        ),
+        (
+            "直播时长",
+            format_duration(data["LiveTime"].as_i64().unwrap_or(0)),
+        ),
+        (
+            "最大在线",
+            data["MaxOnline"].as_i64().unwrap_or(0).to_string(),
+        ),
+        (
+            "累计观看",
+            data["WatchedCount"].as_i64().unwrap_or(0).to_string(),
+        ),
+        (
+            "粉丝勋章",
+            data["NewFansClub"].as_i64().unwrap_or(0).to_string(),
+        ),
+        (
+            "金仓鼠",
+            data["HamsterRmb"].as_i64().unwrap_or(0).to_string(),
+        ),
     ];
     // 计算最长 key 的终端显示宽度，按宽度补齐空格实现对齐
     let max_width = stats

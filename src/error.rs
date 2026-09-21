@@ -5,6 +5,9 @@ pub enum BiliLiveError {
     #[error("网络请求失败: {0}")]
     Network(#[from] minreq::Error),
 
+    #[error("Web 登录请求失败: {0}")]
+    WebNetwork(#[from] ureq::Error),
+
     #[error("JSON解析失败: {0}")]
     Json(#[from] serde_json::Error),
 

@@ -6,7 +6,7 @@ use crate::{user_info, user_warning};
 
 pub fn check_status() -> Result<bool> {
     user_info!("检查登录状态...");
-    let cookie_path = data_file("cookies.json");
+    let cookie_path = data_file("cookies.json")?;
     if !cookie_path.exists() {
         user_warning!("cookies.json文件不存在");
         return Ok(false);
@@ -19,7 +19,7 @@ pub fn check_status() -> Result<bool> {
         return Ok(false);
     }
     let sessdata = read_cookies()?.sessdata;
-    let response = minreq::get("https://api.bilibili.com/x/web-interface/nav")
+    let response = crate::api::client::get("https://api.bilibili.com/x/web-interface/nav")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Cookie", format!("SESSDATA={}", sessdata))
         .send()?;
