@@ -1,11 +1,16 @@
 use crate::api::client::DEFAULT_USER_AGENT;
 use crate::auth::cookies::read_cookies;
+use crate::cli::output::{is_json, is_quiet};
 use crate::error::{BiliLiveError, Result};
 use crossterm::style::Stylize;
 use unicode_width::UnicodeWidthStr;
 
 // 通过 live_key 获取直播统计信息（下播后调用）
 pub fn get_live_info(live_id: u64) -> Result<()> {
+    if is_json() || is_quiet() {
+        return Ok(());
+    }
+
     let cookies = read_cookies()?;
     let url = format!(
         "https://api.live.bilibili.com/xlive/app-blink/v1/live/StopLiveData?live_key={}",
@@ -15,7 +20,7 @@ pub fn get_live_info(live_id: u64) -> Result<()> {
     let response = crate::api::client::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/json, text/plain, */*")
-        .with_header("Cookie", format!("SESSDATA={}", cookies.sessdata))
+        .with_header("Cookie", cookies.cookie_header())
         .send()?;
 
     let response_text = response.as_str()?;
@@ -62,7 +67,6 @@ pub fn get_live_info(live_id: u64) -> Result<()> {
             data["HamsterRmb"].as_i64().unwrap_or(0).to_string(),
         ),
     ];
-    // 计算最长 key 的终端显示宽度，按宽度补齐空格实现对齐
     let max_width = stats
         .iter()
         .map(|(k, _)| UnicodeWidthStr::width(*k))

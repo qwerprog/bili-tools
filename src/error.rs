@@ -31,6 +31,9 @@ pub enum BiliLiveError {
 
     #[error("数据解析失败: {0}")]
     Parse(String),
+
+    #[error("认证错误: {0}")]
+    Auth(String),
 }
 
 pub type Result<T> = std::result::Result<T, BiliLiveError>;

@@ -2,12 +2,36 @@ use crate::api::passport::{
     PollStatus, SmsSendStatus, generate_qr_code, generate_web_qr_code, login_by_password,
     login_by_sms, poll_qr_status, poll_web_qr_status, send_sms_with_recaptcha,
 };
-use crate::auth::cookies::save_cookies_from_credentials;
+use crate::auth::cookies::Cookies;
 use crate::error::{BiliLiveError, Result};
 use crate::utils::paths::data_file;
 use crate::utils::qrcode::{generate_and_save_qrcode, print_qrcode_in_terminal};
 use crate::{user_info, user_success, user_warning};
 use dialoguer::{Input, Password, Select, theme::ColorfulTheme};
+
+/// 保存完整的登录凭据并持久化
+fn save_login_credentials(
+    sessdata: String,
+    csrf_token: String,
+    dede_user_id: String,
+    dede_user_id_ck_md5: String,
+    refresh_token: String,
+) -> Result<()> {
+    let mut cookies = Cookies {
+        sessdata: sessdata.clone(),
+        bili_jct: csrf_token,
+        dede_user_id,
+        dede_user_id_ck_md5,
+        refresh_token,
+        ..Default::default()
+    };
+    if let Ok(rid) = crate::api::passport::get_roomid(&sessdata) {
+        cookies.room_id = rid;
+    }
+    let _ = cookies.ensure_buvid();
+    cookies.save()?;
+    Ok(())
+}
 
 // 登录入口：显示 dialoguer 菜单，根据选择分发到不同登录方式
 pub fn start_login() -> Result<()> {
@@ -43,8 +67,15 @@ fn login_by_password_flow() -> Result<()> {
         .interact()
         .map_err(|e| BiliLiveError::Input(format!("读取密码失败: {e}")))?;
 
-    let (sessdata, csrf_token) = login_by_password(&username, &password)?;
-    save_cookies_from_credentials(&sessdata, &csrf_token)?;
+    let (sessdata, csrf_token, dede_user_id, dede_user_id_ck_md5, refresh_token) =
+        login_by_password(&username, &password)?;
+    save_login_credentials(
+        sessdata,
+        csrf_token,
+        dede_user_id,
+        dede_user_id_ck_md5,
+        refresh_token,
+    )?;
     user_success!("登录成功！");
     Ok(())
 }
@@ -99,8 +130,15 @@ fn login_by_sms_flow() -> Result<()> {
         .interact_text()
         .map_err(|e| BiliLiveError::Input(format!("读取验证码失败: {e}")))?;
 
-    let (sessdata, csrf_token) = login_by_sms(code, payload)?;
-    save_cookies_from_credentials(&sessdata, &csrf_token)?;
+    let (sessdata, csrf_token, dede_user_id, dede_user_id_ck_md5, refresh_token) =
+        login_by_sms(code, payload)?;
+    save_login_credentials(
+        sessdata,
+        csrf_token,
+        dede_user_id,
+        dede_user_id_ck_md5,
+        refresh_token,
+    )?;
     user_success!("登录成功！");
     Ok(())
 }
@@ -155,8 +193,17 @@ fn poll_until_success(key: &str, tv: bool) -> Result<()> {
             PollStatus::Success {
                 sessdata,
                 csrf_token,
+                dede_user_id,
+                dede_user_id_ck_md5,
+                refresh_token,
             } => {
-                save_cookies_from_credentials(&sessdata, &csrf_token)?;
+                save_login_credentials(
+                    sessdata,
+                    csrf_token,
+                    dede_user_id,
+                    dede_user_id_ck_md5,
+                    refresh_token,
+                )?;
                 user_success!("登录成功！");
                 return Ok(());
             }

@@ -1,4 +1,9 @@
 pub mod area;
 pub mod client;
+pub mod fav;
+pub mod history;
 pub mod live;
 pub mod passport;
+pub mod search;
+pub mod video;
+pub mod wbi;
