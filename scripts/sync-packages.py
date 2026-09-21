@@ -60,6 +60,17 @@ for arch, file in [('x64', 'bt-x86_64-windows.zip'), ('arm64', 'bt-arm64-windows
 '''
 winget.write_text(text[:start] + installers + text[end:])
 
+winget_dir = ROOT / f'pkg/winget-pkgs/manifests/q/QwerProg/bt/{version}'
+winget_dir.mkdir(parents=True, exist_ok=True)
+installer = f"PackageIdentifier: QwerProg.bt\nPackageVersion: {version}\n" + installers + "ManifestType: installer\nManifestVersion: 1.9.0\n"
+(winget_dir / 'QwerProg.bt.installer.yaml').write_text(installer)
+for filename in ['QwerProg.bt.locale.en-US.yaml', 'QwerProg.bt.yaml']:
+    template = (ROOT / 'pkg/winget-pkgs/manifests/q/QwerProg/bt/0.1.1' / filename).read_text()
+    template = re.sub(r'PackageVersion: .*', f'PackageVersion: {version}', template)
+    if 'locale' in filename:
+        template = template.replace('ManifestType:', f'ReleaseNotesUrl: https://github.com/QwerProg/bili-tools/releases/tag/v{version}\nManifestType:')
+    (winget_dir / filename).write_text(template)
+
 aur = ROOT / 'pkg/aur-bin/PKGBUILD'
 aur.parent.mkdir(parents=True, exist_ok=True)
 aur.write_text(f'''# Maintainer: QwerProg
