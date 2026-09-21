@@ -194,7 +194,7 @@ fn run(args: Args) -> Result<()> {
                 let mut stdout = std::io::stdout();
                 let _ = crossterm::execute!(stdout, crossterm::cursor::Hide);
                 while start.elapsed().as_secs() < total {
-                    let remaining = total - start.elapsed().as_secs();
+                    let remaining = total.saturating_sub(start.elapsed().as_secs());
                     let h = remaining / 3600;
                     let m = (remaining % 3600) / 60;
                     let s = remaining % 60;
@@ -242,7 +242,7 @@ fn run(args: Args) -> Result<()> {
                         .map(|(i, c)| i + c.len_utf8())
                         .last()
                         .unwrap_or(0);
-                    println!("{}", &line[..end.min(line.len())].with(pink));
+                    println!("{}", line[..end.min(line.len())].with(pink));
                 }
             }
             let cookies = auth::cookies::read_cookies()?;
@@ -360,22 +360,37 @@ fn parse_delay(input: &str) -> Result<u64> {
             num.push(c);
         } else {
             if num.is_empty() {
-                return Err(BiliLiveError::Parse(format!("无效的时间格式: 连续的单位或单位出现在数值之前 ({})", input)));
+                return Err(BiliLiveError::Parse(format!(
+                    "无效的时间格式: 连续的单位或单位出现在数值之前 ({})",
+                    input
+                )));
             }
             let val: u64 = num
                 .parse()
                 .map_err(|_| BiliLiveError::Parse(format!("无效的时间数值: {}", input)))?;
             num.clear();
-            match c {
-                'h' | 'H' => total += val * 3600,
-                'm' | 'M' => total += val * 60,
-                's' | 'S' => total += val,
-                _ => return Err(BiliLiveError::Parse(format!("无效的时间单位 '{}' (仅支持 h, m, s)", c))),
-            }
+            let multiplier = match c {
+                'h' | 'H' => 3600,
+                'm' | 'M' => 60,
+                's' | 'S' => 1,
+                _ => {
+                    return Err(BiliLiveError::Parse(format!(
+                        "无效的时间单位 '{}' (仅支持 h, m, s)",
+                        c
+                    )));
+                }
+            };
+            total = val
+                .checked_mul(multiplier)
+                .and_then(|seconds| total.checked_add(seconds))
+                .ok_or_else(|| BiliLiveError::Parse("延迟时间超过支持范围".to_string()))?;
         }
     }
     if !num.is_empty() {
-        return Err(BiliLiveError::Parse(format!("数值 '{}' 缺少时间单位 (例如 h, m, s)", num)));
+        return Err(BiliLiveError::Parse(format!(
+            "数值 '{}' 缺少时间单位 (例如 h, m, s)",
+            num
+        )));
     }
     if total == 0 {
         return Err(BiliLiveError::Parse(format!("无效的延迟时间: {}", input)));
@@ -411,5 +426,11 @@ mod tests {
         assert!(parse_delay("30m45").is_err());
         assert!(parse_delay("abc").is_err());
         assert!(parse_delay("m30").is_err());
+        assert!(parse_delay("18446744073709551615h").is_err());
+        assert!(parse_delay("18446744073709551615m").is_err());
+        assert!(parse_delay("18446744073709551615s2s").is_err());
+        assert_eq!(parse_delay("18446744073709551615s").unwrap(), u64::MAX);
+        assert!(parse_delay("").is_err());
+        assert!(parse_delay("0s").is_err());
     }
 }

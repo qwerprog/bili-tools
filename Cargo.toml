@@ -1,6 +1,6 @@
 [package]
 name = "bili-tools"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 
 [[bin]]
@@ -46,3 +46,8 @@ dialoguer = "0.12"
 unicode-width = "0.2"
 dirs = "6"
 ctrlc = "3.4"
+
+tempfile = "3"
+
+# Web 登录需要保留多条 Set-Cookie；minreq 的响应头 HashMap 会覆盖它们。
+ureq = { version = "3.4", default-features = false, features = ["rustls"] }

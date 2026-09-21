@@ -2,7 +2,7 @@ use crate::api::client::DEFAULT_USER_AGENT;
 use crate::error::Result;
 
 pub fn fetch_area_list() -> Result<serde_json::Value> {
-    let response = minreq::get("https://api.live.bilibili.com/room/v1/Area/getList")
+    let response = crate::api::client::get("https://api.live.bilibili.com/room/v1/Area/getList")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .send()?;
 

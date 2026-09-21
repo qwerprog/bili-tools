@@ -108,7 +108,7 @@ Commands:
 
 ```
 # 首次使用 — 扫码登录
-✔ 选择一种登录方式 · 扫码登录
+✔ 选择一种登录方式 · 扫码登录（Web，推荐）
 · 开始B站二维码登录流程...
 [终端弹出二维码]
 ✅ 二维码已保存到 qrcode.png
@@ -145,6 +145,14 @@ bt start
 bt status
 ```
 
+### 登录方式
+
+默认使用 Web 扫码登录；菜单保留 TV 扫码作为备用，也支持短信、账号密码和浏览器链接登录。扫码等待约 3 分钟后超时，二维码过期时请重新登录。所有 HTTP 请求设置 30 秒超时。
+
+Linux/macOS 上，数据目录权限为 `0700`，Cookie 和推流信息文件为 `0600`；访问数据目录时会收紧旧版本文件的权限。凭据采用临时文件写入后替换，避免写入中断损坏原文件。
+
+开播成功后的推流文件或统计标识保存失败、下播成功后的统计查询失败，均单独显示警告，不会将已完成的开播/下播报告为失败。
+
 ## 分区选择
 
 使用上下箭头选择分区大类，Enter 确认后选择子分区。
@@ -154,7 +162,7 @@ bt status
 | 类别 | 依赖 |
 |---|---|
 | CLI 解析 | `clap 4`（derive 宏） |
-| HTTP 请求 | `minreq`（轻量级，rustls TLS） |
+| HTTP 请求 | `minreq`；Web 登录轮询使用 `ureq` 保留多条 Cookie 响应头（rustls TLS） |
 | 序列化 | `serde` + `serde_json` |
 | 终端 UI | `dialoguer` |
 | 二维码 | `qrcode` + `image` |
@@ -234,7 +242,8 @@ CI 由 GitHub Actions 驱动，推送 `v*` tag 时自动执行多平台交叉编
 1. **Windows** (`windows-latest`)：构建 `x86_64` (x64) 与 `aarch64` (ARM64) 二进制，并分别打包为 `bt-x86_64-windows.zip` 和 `bt-arm64-windows.zip`。
 2. **macOS** (`macos-latest`)：构建 `x86_64` (Intel) 与 `aarch64` (Apple Silicon) 二进制，分别打包为 `bt-x86_64-macos.zip` 和 `bt-arm64-macos.zip`。
 3. **Linux** (`ubuntu-latest`)：构建 `x86_64` 与 `aarch64` 二进制，分别打包为 `bt-x86_64-linux.tar.gz` 和 `bt-arm64-linux.tar.gz`。
-4. **Winget 自动提交**：自动计算 `x86_64` Windows 构建包的 SHA256 哈希值，生成清单并自动向微软官方的 `microsoft/winget-pkgs` 提交 PR。
+4. **统一发布**：六个平台构建成功后，使用 `docs/releases/v版本号.md` 发布说明生成 Release，上传完整 SHA256SUMS。
+5. **包管理器更新**：运行同步脚本后推送 Scoop、Homebrew、AUR 清单，并向 `microsoft/winget-pkgs` 提交更新 PR。
 
 Release 构建参数已做极限体积优化，并静态链接 MSVC 运行时，**无需额外安装 VC++ Redistributable**：
 
@@ -254,14 +263,14 @@ strip = "symbols"
 ```bash
 # 1. 修改 Cargo.toml 中的 version
 # 2. 运行同步脚本
-./scripts/sync-version.sh
+./scripts/sync-version.sh --checksums /path/to/SHA256SUMS
 ```
 
-该脚本会同步更新 `pkg/scoop/bt.json` 和 `pkg/winget/QwerProg.bt.installer.yaml` 中的版本号与下载 URL。
+该脚本根据发布包的 SHA256SUMS，同步更新 Scoop（含 bucket 入口）、Homebrew、WinGet 和 AUR 二进制包的版本、下载地址和校验和。必须先完成发布包构建。
 
 ## 设计亮点
 
-- **极简依赖**：用 `minreq` 替代 `reqwest`，去掉异步运行时，整体为同步阻塞模型，逻辑直观
+- **同步请求**：常规接口使用 `minreq`，Web 登录轮询使用 `ureq` 完整读取多条 `Set-Cookie`，无需异步运行时
 - **体积优化**：激进的 Release 配置使产出二进制尽可能小，适合直接分发单文件
 - **跨平台分发**：Scoop、Winget、AUR、Homebrew、Cargo 均有支持
 - **推流码安全**：默认打码（`prefix****...suffix`），`--show` 才显示完整推流码
