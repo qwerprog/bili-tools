@@ -2,6 +2,9 @@
 name = "bili-tools"
 version = "0.1.6"
 edition = "2024"
+description = "B站工具箱 (Bilibili CLI toolbox)"
+repository = "https://github.com/qwerprog/bili-tools"
+homepage = "https://github.com/qwerprog/bili-tools"
 
 [[bin]]
 name = "bt"

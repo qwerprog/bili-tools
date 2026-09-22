@@ -1,14 +1,14 @@
 # Maintainer: QwerProg
 pkgname=bili-tools-git
-pkgver=0.1.5
+pkgver=0.1.6
 pkgrel=1
-pkgdesc="B站直播开播工具 — 命令行一键开播/下播"
+pkgdesc="B站工具箱 — 命令行多功能工具与一键开播/下播"
 arch=('x86_64' 'aarch64')
-url="https://github.com/QwerProg/bili-tools"
+url="https://github.com/qwerprog/bili-tools"
 license=('MIT')
 depends=('gcc-libs')
 makedepends=('cargo' 'git')
-source=("git+https://github.com/QwerProg/bili-tools.git")
+source=("git+https://github.com/qwerprog/bili-tools.git")
 options=(!lto)
 sha256sums=('SKIP')
 
