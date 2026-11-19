@@ -45,23 +45,6 @@ paru -S bili-tools-bin
 winget install QwerProg.bt
 ```
 
-#### Scoop
-
-```powershell
-# 安装 Scoop
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
-
-# 添加 bucket
-scoop bucket add QwerProg https://github.com/QwerProg/bili-tools
-
-# 安装
-scoop install bt
-
-# 日后升级
-scoop update bt
-```
-
 #### 手动下载
 从 [Releases](https://github.com/QwerProg/bili-tools/releases) 下载 `bt-x86_64-windows.zip`，解压后即可运行。
 
@@ -386,7 +369,7 @@ CI 由 GitHub Actions 驱动，推送 `v*` tag 时自动执行多平台交叉编
 2. **macOS** (`macos-latest`)：构建 `x86_64` (Intel) 与 `aarch64` (Apple Silicon) 二进制，分别打包为 `bt-x86_64-macos.zip` 和 `bt-arm64-macos.zip`。
 3. **Linux** (`ubuntu-latest`)：构建 `x86_64` 与 `aarch64` 二进制，分别打包为 `bt-x86_64-linux.tar.gz` 和 `bt-arm64-linux.tar.gz`。
 4. **统一发布**：六个平台构建成功后，使用 `docs/releases/v版本号.md` 发布说明生成 Release，上传完整 SHA256SUMS。
-5. **包管理器更新**：运行同步脚本后推送 Scoop、Homebrew、AUR 清单，并向 `microsoft/winget-pkgs` 提交更新 PR。
+5. **包管理器更新**：运行同步脚本后推送 Homebrew、AUR 清单，并向 `microsoft/winget-pkgs` 提交更新 PR。
 
 Release 构建参数已做极限体积优化，并静态链接 MSVC 运行时，**无需额外安装 VC++ Redistributable**：
 
@@ -409,13 +392,13 @@ strip = "symbols"
 ./scripts/sync-version.sh --checksums /path/to/SHA256SUMS
 ```
 
-该脚本根据发布包的 SHA256SUMS，同步更新 Scoop（含 bucket 入口）、Homebrew、WinGet 和 AUR 二进制包的版本、下载地址和校验和。必须先完成发布包构建。
+该脚本根据发布包的 SHA256SUMS，同步更新 Homebrew、WinGet 和 AUR 二进制包的版本、下载地址和校验和。必须先完成发布包构建。
 
 ## 设计亮点
 
 - **同步请求**：常规接口使用 `minreq`，Web 登录轮询使用 `ureq` 完整读取多条 `Set-Cookie`，无需异步运行时
 - **体积优化**：激进的 Release 配置使产出二进制尽可能小，适合直接分发单文件
-- **跨平台分发**：Scoop、Winget、AUR、Homebrew、Cargo 均有支持
+- **跨平台分发**：Winget、AUR、Homebrew、Cargo 均有支持
 - **推流码安全**：默认打码（`prefix****...suffix`），`--show` 才显示完整推流码
 - **非交互式友好**：`bt live start -a ... -t ...` 组合可完全跳过交互，便于脚本调用；所有命令均支持 `--json` 结构化输出与 `-u/--cookie-file` 多账号隔离
 
