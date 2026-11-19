@@ -129,7 +129,7 @@ pub(crate) fn handle_live_start(
     if relogin {
         if is_json() || !std::io::stdin().is_terminal() {
             return Err(BiliLiveError::Auth(
-                "JSON 或非交互模式下不支持 --relogin 交互登录，请先使用 `bt auth login --method cookie`"
+                "JSON 或非交互模式下不支持 --relogin 交互登录，请先使用 `bit auth login --method cookie`"
                     .to_string(),
             ));
         }
@@ -160,7 +160,7 @@ pub(crate) fn handle_live_start(
             }))?;
         } else {
             user_warning!(
-                "直播间 {} 当前已在直播中，未执行重复开播或关闭操作；如需下播请使用 `bt live stop`",
+                "直播间 {} 当前已在直播中，未执行重复开播或关闭操作；如需下播请使用 `bit live stop`",
                 room_id
             );
         }

@@ -241,7 +241,7 @@ pub(crate) fn resolve_history_kid(
 
     let lower = trimmed.to_ascii_lowercase();
 
-    // 1. 直接匹配 `bt history list` 展示的 `room:<id>` 与 `cv<id>`
+    // 1. 直接匹配 `bit history list` 展示的 `room:<id>` 与 `cv<id>`
     if let Some(rest) = lower.strip_prefix("room:")
         && let Some(rid) = parse_positive_digits(rest)
     {

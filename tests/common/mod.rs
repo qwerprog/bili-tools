@@ -3253,11 +3253,11 @@ impl TestEnv {
     pub fn default_cookie_path(&self) -> PathBuf {
         #[cfg(target_os = "macos")]
         {
-            self.home_dir.join(".config").join("bt").join("cookies.json")
+            self.home_dir.join(".config").join("bit").join("cookies.json")
         }
         #[cfg(not(target_os = "macos"))]
         {
-            self.xdg_dir.join("bt").join("cookies.json")
+            self.xdg_dir.join("bit").join("cookies.json")
         }
     }
 
@@ -3524,7 +3524,7 @@ fn main() {
     }
 
     pub fn run_bt_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> BtOutput {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_bt"));
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_bit"));
         cmd.args(args)
             .current_dir(&self.work_dir)
             .stdin(Stdio::null())

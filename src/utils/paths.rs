@@ -21,7 +21,7 @@ pub fn cookies_path() -> io::Result<PathBuf> {
     data_file("cookies.json")
 }
 
-/// Linux 遵循 XDG，macOS 使用 ~/.config/bt，Windows 使用 %APPDATA%/bt。
+/// Linux 遵循 XDG，macOS 使用 ~/.config/bit，Windows 使用 %APPDATA%/bit（并兼容迁移旧 bt 目录）。
 pub fn data_dir() -> io::Result<PathBuf> {
     #[cfg(target_os = "macos")]
     let base = dirs::home_dir().map(|home| home.join(".config"));
@@ -32,11 +32,27 @@ pub fn data_dir() -> io::Result<PathBuf> {
         .or_else(dirs::config_dir);
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let base = dirs::config_dir();
-    let path = base
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "无法确定配置目录"))?
-        .join("bt");
+    let root = base.ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "无法确定配置目录"))?;
+    let path = root.join("bit");
     prepare_data_dir(&path)?;
+    migrate_legacy_bt_dir(&root.join("bt"), &path);
     Ok(path)
+}
+
+fn migrate_legacy_bt_dir(legacy: &Path, target: &Path) {
+    if !legacy.is_dir() || target.join("cookies.json").exists() {
+        return;
+    }
+    for name in ["cookies.json", "stream_info.txt"] {
+        let src = legacy.join(name);
+        let dst = target.join(name);
+        if src.is_file()
+            && !dst.exists()
+            && let Ok(bytes) = fs::read(&src)
+        {
+            let _ = write_private(&dst, &bytes);
+        }
+    }
 }
 
 fn prepare_data_dir(path: &Path) -> io::Result<()> {

@@ -24,7 +24,7 @@ use crate::error::Result;
 
 pub(crate) fn metadata_json_value() -> serde_json::Value {
     serde_json::json!({
-        "name": "bt",
+        "name": "bit",
         "package": env!("CARGO_PKG_NAME"),
         "version": env!("CARGO_PKG_VERSION"),
         "modules": [
@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn metadata_json_contains_all_twelve_modules_and_global_flags() {
         let meta = metadata_json_value();
-        assert_eq!(meta["name"], "bt");
+        assert_eq!(meta["name"], "bit");
         let mods = meta["modules"].as_array().unwrap();
         let expected = [
             "resolve",

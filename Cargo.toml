@@ -6,7 +6,7 @@ description = "B站工具箱 (Bilibili CLI toolbox)"
 repository = "https://github.com/qwerprog/bili-tools"
 
 [[bin]]
-name = "bt"
+name = "bit"
 path = "src/main.rs"
 
 [profile.release]

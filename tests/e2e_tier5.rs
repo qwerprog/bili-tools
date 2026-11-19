@@ -19,7 +19,7 @@ fn t5_cli_json_version_help_and_missing_subcommand() {
     for ver_flag in ["-V", "--version"] {
         let out = env.run_bt(&["--json", ver_flag]);
         let v = out.assert_json_ok();
-        assert_eq!(v["name"], "bt");
+        assert_eq!(v["name"], "bit");
         assert_eq!(v["package"], "bili-tools");
         assert_eq!(v["version"], env!("CARGO_PKG_VERSION"));
         assert!(out.stderr.trim().is_empty());
@@ -27,7 +27,7 @@ fn t5_cli_json_version_help_and_missing_subcommand() {
 
     let help_alias = env.run_bt(&["--json", "help"]);
     let v_help = help_alias.assert_json_ok();
-    assert_eq!(v_help["name"], "bt");
+    assert_eq!(v_help["name"], "bit");
     assert!(v_help["modules"].is_array());
     assert!(help_alias.stderr.trim().is_empty());
 
@@ -38,7 +38,7 @@ fn t5_cli_json_version_help_and_missing_subcommand() {
     let quiet_ver = env.run_bt(&["-q", "-V"]);
     quiet_ver
         .assert_exit(0)
-        .assert_stdout_contains("bt")
+        .assert_stdout_contains("bit")
         .assert_stdout_contains(env!("CARGO_PKG_VERSION"));
 
     let missing_sub = env.run_bt(&["--json", "auth"]);
@@ -116,7 +116,7 @@ fn t5_stdout_broken_pipe_exits_cleanly_without_panic() {
         vec!["--json"],
         vec!["--help"],
     ] {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_bt"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_bit"))
             .args(&args)
             .current_dir(env.work_dir())
             .env("HOME", env.home_dir())
@@ -713,9 +713,9 @@ fn t5_later_and_history_human_rendering_and_completions_install_all_shells() {
 
     // Completions --install for bash, powershell, elvish
     for (shell, rel_path) in [
-        ("bash", ".local/share/bash-completion/completions/bt"),
-        ("powershell", ".config/powershell/completions/bt.ps1"),
-        ("elvish", ".config/elvish/lib/bt.elv"),
+        ("bash", ".local/share/bash-completion/completions/bit"),
+        ("powershell", ".config/powershell/completions/bit.ps1"),
+        ("elvish", ".config/elvish/lib/bit.elv"),
     ] {
         let out = env.run_bt(&["--json", "completions", shell, "--install"]);
         let v = out.assert_json_ok();
@@ -1859,7 +1859,7 @@ fn t5_phase1_phase2_cli_ergonomics_pgc_srt_and_untruncated_urls() {
     assert_eq!(md_info["season_id"], 678);
     assert_eq!(md_info["pages"].as_array().unwrap().len(), 2);
 
-    // 5. P1-4 & P1-6 & P2-3: history rm room:/cv + cursor, bare `bt user info`, nested fav export
+    // 5. P1-4 & P1-6 & P2-3: history rm room:/cv + cursor, bare `bit user info`, nested fav export
     server.reset_requests();
     let del_live = env
         .run_bt(&["--json", "history", "rm", "room:76"])

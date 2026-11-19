@@ -104,12 +104,12 @@ fn print_styled_version() {
         let _ = writeln!(
             stdout,
             "{} {} {}",
-            "bt".with(ui::theme::BILI_PINK).bold(),
+            "bit".with(ui::theme::BILI_PINK).bold(),
             format!("v{ver}").with(ui::theme::BILI_CYAN).bold(),
             "(bili-tools · Bilibili CLI Toolbox)".dark_grey()
         );
     } else {
-        let _ = writeln!(stdout, "bt {ver}");
+        let _ = writeln!(stdout, "bit {ver}");
     }
 }
 
@@ -147,7 +147,7 @@ fn main() {
             ErrorKind::DisplayVersion => {
                 if raw.json {
                     let _ = cli::output::print_json(&serde_json::json!({
-                        "name": "bt",
+                        "name": "bit",
                         "package": env!("CARGO_PKG_NAME"),
                         "version": env!("CARGO_PKG_VERSION")
                     }));

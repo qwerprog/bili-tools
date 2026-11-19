@@ -616,7 +616,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 let need_login = v2["need_login_subtitle"].as_bool().unwrap_or(false);
                 if need_login && cookies.is_none() {
                     return Err(BiliLiveError::Auth(
-                        "该视频字幕需要登录后才能获取，请先执行 `bt auth login`".to_string(),
+                        "该视频字幕需要登录后才能获取，请先执行 `bit auth login`".to_string(),
                     ));
                 }
                 return Err(BiliLiveError::Input("该视频分P暂无可用字幕".to_string()));

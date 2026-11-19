@@ -66,13 +66,13 @@ pub fn render_banner(cols: usize, enable_color: bool) -> String {
                     let meta = if enable_color {
                         format!(
                             "{} {} {} {}",
-                            format!("bt v{version}").with(BILI_PINK).bold(),
+                            format!("bit v{version}").with(BILI_PINK).bold(),
                             "·".dark_grey(),
                             "Live · Video · Search · Fav · History".dark_grey(),
                             "· Rust".dark_grey()
                         )
                     } else {
-                        format!("bt v{version} · Live · Video · Search · Fav · History · Rust")
+                        format!("bit v{version} · Live · Video · Search · Fav · History · Rust")
                     };
                     format!("{tv_rendered}   {meta}")
                 }
@@ -173,12 +173,12 @@ pub(crate) fn render_welcome_help(cols: usize, color: bool) -> String {
         let _ = writeln!(
             out,
             "    {} {} {}",
-            "bt".with(BILI_PINK).bold(),
+            "bit".with(BILI_PINK).bold(),
             "[全局选项]".dark_grey(),
             "<命令> [子命令] [参数]".with(Color::White)
         );
     } else {
-        let _ = writeln!(out, "    bt [全局选项] <命令> [子命令] [参数]");
+        let _ = writeln!(out, "    bit [全局选项] <命令> [子命令] [参数]");
     }
     let _ = writeln!(out);
 
@@ -209,7 +209,7 @@ pub(crate) fn render_welcome_help(cols: usize, color: bool) -> String {
         ("-y, --yes", "自动确认交互式或危险操作"),
         ("--no-color", "禁用终端彩色输出（等价于 NO_COLOR=1）"),
         ("-u, --cookie-file <PATH>", "指定自定义 Cookie 文件路径"),
-        ("-h, --help", "显示帮助信息（支持子命令，如 `bt live -h`）"),
+        ("-h, --help", "显示帮助信息（支持子命令，如 `bit live -h`）"),
         ("-V, --version", "显示当前版本号"),
     ];
     for (flag, desc) in flags {
@@ -219,13 +219,13 @@ pub(crate) fn render_welcome_help(cols: usize, color: bool) -> String {
 
     let _ = writeln!(out, "  {}", heading("快捷示例 Quick Start"));
     let examples = [
-        ("bt auth login", "终端扫码登录 B 站账号"),
-        ("bt live start", "交互式选择分区与标题并一键获取 OBS 推流码"),
-        ("bt live chat", "打开看发一体的终端实时直播弹幕聊天室 (TUI)"),
-        ("bt video download BV1xx...", "下载视频与弹幕字幕（DASH 混流需 ffmpeg）"),
-        ("bt user info 293793435", "查看指定 UP 主主页信息与粉丝数据"),
-        ("bt rank popular", "查看 B 站当前综合热门视频"),
-        ("bt search hot", "查看 B 站实时热搜榜单"),
+        ("bit auth login", "终端扫码登录 B 站账号"),
+        ("bit live start", "交互式选择分区与标题并一键获取 OBS 推流码"),
+        ("bit live chat", "打开看发一体的终端实时直播弹幕聊天室 (TUI)"),
+        ("bit video download BV1xx...", "下载视频与弹幕字幕（DASH 混流需 ffmpeg）"),
+        ("bit user info 293793435", "查看指定 UP 主主页信息与粉丝数据"),
+        ("bit rank popular", "查看 B 站当前综合热门视频"),
+        ("bit search hot", "查看 B 站实时热搜榜单"),
     ];
     for (ex, comment) in examples {
         let padded = pad_to_width(ex, 30);
@@ -240,13 +240,13 @@ pub(crate) fn render_welcome_help(cols: usize, color: bool) -> String {
     let _ = writeln!(
         out,
         "  {}",
-        dim("提示: 输入 `bt <命令> --help` 查看各模块的详细子命令与参数说明。")
+        dim("提示: 输入 `bit <命令> --help` 查看各模块的详细子命令与参数说明。")
     );
 
     out
 }
 
-/// 打印顶层欢迎页与分组彩色帮助指南（用于空参 `bt` 或 `bt --help`）
+/// 打印顶层欢迎页与分组彩色帮助指南（用于空参 `bit` 或 `bit --help`）
 pub fn print_welcome_help() {
     let out = render_welcome_help(terminal_width(), color_enabled());
     let mut stdout = std::io::stdout().lock();

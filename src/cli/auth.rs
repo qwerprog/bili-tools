@@ -45,7 +45,7 @@ pub fn handle_auth(cmd: AuthCommands) -> Result<()> {
                             "message": "未找到本地 Cookie"
                         }))?;
                     } else {
-                        user_warning!("未检测到登录信息，请执行 `bt auth login` 登录");
+                        user_warning!("未检测到登录信息，请执行 `bit auth login` 登录");
                     }
                 }
                 SessionState::Unauthenticated { .. } => {
@@ -55,7 +55,7 @@ pub fn handle_auth(cmd: AuthCommands) -> Result<()> {
                             "message": "账号未登录或登录凭证已过期"
                         }))?;
                     } else {
-                        user_warning!("登录凭证已失效，请执行 `bt auth login` 重新登录");
+                        user_warning!("登录凭证已失效，请执行 `bit auth login` 重新登录");
                     }
                 }
                 SessionState::Authenticated { mut cookies, info } => {
@@ -159,14 +159,14 @@ pub fn handle_auth(cmd: AuthCommands) -> Result<()> {
                 Ok(c) => c,
                 Err(BiliLiveError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => {
                     return Err(BiliLiveError::Auth(
-                        "未检测到登录信息，请执行 `bt auth login` 进行登录".to_string(),
+                        "未检测到登录信息，请执行 `bit auth login` 进行登录".to_string(),
                     ));
                 }
                 Err(e) => return Err(e),
             };
             if cookies.sessdata.trim().is_empty() {
                 return Err(BiliLiveError::Auth(
-                    "未检测到登录信息，请执行 `bt auth login` 进行登录".to_string(),
+                    "未检测到登录信息，请执行 `bit auth login` 进行登录".to_string(),
                 ));
             }
             if cookies.bili_jct.trim().is_empty() {

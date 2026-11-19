@@ -1546,7 +1546,7 @@ fn t2_f14_02() {
     for flag in ["--help", "-h"] {
         let out = env.run_bt(&["-q", flag]);
         out.assert_exit(0)
-            .assert_stdout_contains("bt")
+            .assert_stdout_contains("bit")
             .assert_stdout_contains("resolve");
         assert!(out.stderr.trim().is_empty());
     }
@@ -1570,12 +1570,12 @@ fn t2_f14_04() {
     let eq_flag = format!("--cookie-file={missing_str}");
 
     let out_a = env.run_bt(&["-u", &missing_str, "--help"]);
-    out_a.assert_exit(0).assert_stdout_contains("bt");
+    out_a.assert_exit(0).assert_stdout_contains("bit");
     assert!(!missing.exists());
     assert!(!missing.parent().unwrap().exists());
 
     let out_b = env.run_bt(&[&eq_flag, "--help"]);
-    out_b.assert_exit(0).assert_stdout_contains("bt");
+    out_b.assert_exit(0).assert_stdout_contains("bit");
     assert!(!missing.exists());
     assert!(!missing.parent().unwrap().exists());
 }

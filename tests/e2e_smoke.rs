@@ -1034,7 +1034,7 @@ fn smoke_bt_binary_opaque_box_cli_and_mock_server() {
     // 1. bt --json metadata
     let env_meta = TestEnv::new().with_server(&server);
     let meta = env_meta.run_bt(&["--json"]).assert_json_ok();
-    assert_eq!(meta["name"], "bt");
+    assert_eq!(meta["name"], "bit");
     let modules = meta["modules"].as_array().expect("modules array");
     for expected in [
         "auth",
@@ -1056,7 +1056,7 @@ fn smoke_bt_binary_opaque_box_cli_and_mock_server() {
     let help = env_meta.run_bt(&["--help"]);
     help.assert_exit(0)
         .assert_no_ansi()
-        .assert_stdout_contains("bt")
+        .assert_stdout_contains("bit")
         .assert_stdout_contains("auth")
         .assert_stdout_contains("live")
         .assert_stdout_contains("search")

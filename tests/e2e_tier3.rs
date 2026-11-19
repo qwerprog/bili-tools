@@ -1057,13 +1057,13 @@ fn t3_18_completions_quiet_json_install_and_12_module_sync() {
     assert_eq!(fish_json["installed"], true);
     assert_eq!(fish_json["shell"], "fish");
 
-    let expected_fish = env.home_dir().join(".config/fish/completions/bt.fish");
+    let expected_fish = env.home_dir().join(".config/fish/completions/bit.fish");
     assert_eq!(
         fish_json["path"].as_str(),
         Some(expected_fish.to_str().expect("utf8 fish path"))
     );
     let fish_script = fs::read_to_string(&expected_fish).expect("installed bt.fish");
-    assert!(fish_script.contains("complete -c bt"));
+    assert!(fish_script.contains("complete -c bit"));
     for module in ["resolve", "user", "feed", "rank"] {
         assert!(
             fish_script.contains(module),
