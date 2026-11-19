@@ -277,17 +277,17 @@ fn t5_auth_buvid_backfill_legacy_aliases_and_permission_tightening() {
 fn t5_ffmpeg_non_exec_override_and_execution_failures() {
     let server = MockBiliServer::start();
 
-    // 1. Non-executable ffmpeg (0o644) in PATH must be ignored -> ExternalTool
-    let env_non_exec = TestEnv::new().with_server(&server).with_fake_ffmpeg();
+    // 1. Non-executable ffmpeg (0o644) in PATH must be ignored -> ExternalTool (Unix permission model)
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
+        let env_non_exec = TestEnv::new().with_server(&server).with_fake_ffmpeg();
         let ff = env_non_exec.bin_dir().join("ffmpeg");
         std::fs::set_permissions(&ff, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let out_non_exec = env_non_exec.run_bt(&["--json", "live", "record", "14073662"]);
+        out_non_exec.assert_json_err(Some("ExternalTool"));
+        assert!(server.requests().is_empty());
     }
-    let out_non_exec = env_non_exec.run_bt(&["--json", "live", "record", "14073662"]);
-    out_non_exec.assert_json_err(Some("ExternalTool"));
-    assert!(server.requests().is_empty());
 
     // 2. Nonexistent BT_FFMPEG_PATH must NOT fall back to valid ffmpeg in PATH
     let env_ok = TestEnv::new().with_server(&server).with_fake_ffmpeg();
@@ -815,11 +815,15 @@ fn t5_c2_01_download_extensionless_and_dotted_templates_preserve_ext_and_sidecar
         .assert_json_ok();
     let files_c = out_c["files"].as_array().unwrap();
     assert!(
-        files_c.iter().any(|v| v.as_str() == Some("sub/my.video_p1.mp4")),
+        files_c
+            .iter()
+            .any(|v| v.as_str().map(|s| s.replace('\\', "/")).as_deref() == Some("sub/my.video_p1.mp4")),
         "expected sub/my.video_p1.mp4 in {files_c:?}"
     );
     assert!(
-        files_c.iter().any(|v| v.as_str() == Some("sub/my.video_p2.mp4")),
+        files_c
+            .iter()
+            .any(|v| v.as_str().map(|s| s.replace('\\', "/")).as_deref() == Some("sub/my.video_p2.mp4")),
         "expected sub/my.video_p2.mp4 in {files_c:?}"
     );
 }
