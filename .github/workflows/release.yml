@@ -79,7 +79,7 @@ jobs:
           mkdir -p dist
           tar -czf dist/bt-x86_64-linux.tar.gz -C target/${{ matrix.target_x86 }}/release bt
           tar -czf dist/bt-arm64-linux.tar.gz -C target/${{ matrix.target_arm }}/release bt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bt-${{ matrix.platform }}
           path: dist/*
@@ -92,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: bt-*
           path: dist
