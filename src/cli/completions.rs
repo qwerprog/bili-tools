@@ -19,11 +19,11 @@ pub fn generate_completion_script(shell: Shell) -> Vec<u8> {
     let mut cmd = Cli::command();
     let mut buf = Vec::new();
     match shell {
-        Shell::Bash => generate(shells::Bash, &mut cmd, "bt", &mut buf),
-        Shell::Zsh => generate(shells::Zsh, &mut cmd, "bt", &mut buf),
-        Shell::Fish => generate(shells::Fish, &mut cmd, "bt", &mut buf),
-        Shell::PowerShell => generate(shells::PowerShell, &mut cmd, "bt", &mut buf),
-        Shell::Elvish => generate(shells::Elvish, &mut cmd, "bt", &mut buf),
+        Shell::Bash => generate(shells::Bash, &mut cmd, "bit", &mut buf),
+        Shell::Zsh => generate(shells::Zsh, &mut cmd, "bit", &mut buf),
+        Shell::Fish => generate(shells::Fish, &mut cmd, "bit", &mut buf),
+        Shell::PowerShell => generate(shells::PowerShell, &mut cmd, "bit", &mut buf),
+        Shell::Elvish => generate(shells::Elvish, &mut cmd, "bit", &mut buf),
     }
     buf
 }
@@ -51,7 +51,7 @@ pub fn handle_completions(shell: Option<Shell>, install: bool) -> Result<()> {
         Some(s) => s,
         None => {
             return Err(crate::error::BiliLiveError::Input(
-                "未指定且无法从 $SHELL 自动识别 shell 类型，请显式指定：bt completions <zsh|bash|fish|powershell|elvish> [--install]"
+                "未指定且无法从 $SHELL 自动识别 shell 类型，请显式指定：bit completions <zsh|bash|fish|powershell|elvish> [--install]"
                     .to_string(),
             ));
         }
@@ -68,41 +68,41 @@ pub fn handle_completions(shell: Option<Shell>, install: bool) -> Result<()> {
         let (dir, file) = match shell {
             Shell::Bash => (
                 home.join(".local/share/bash-completion/completions"),
-                home.join(".local/share/bash-completion/completions/bt"),
+                home.join(".local/share/bash-completion/completions/bit"),
             ),
             Shell::Zsh => (
                 home.join(".zsh/completions"),
-                home.join(".zsh/completions/_bt"),
+                home.join(".zsh/completions/_bit"),
             ),
             Shell::Fish => (
                 home.join(".config/fish/completions"),
-                home.join(".config/fish/completions/bt.fish"),
+                home.join(".config/fish/completions/bit.fish"),
             ),
             Shell::PowerShell => (
                 home.join(".config/powershell/completions"),
-                home.join(".config/powershell/completions/bt.ps1"),
+                home.join(".config/powershell/completions/bit.ps1"),
             ),
             Shell::Elvish => (
                 home.join(".config/elvish/lib"),
-                home.join(".config/elvish/lib/bt.elv"),
+                home.join(".config/elvish/lib/bit.elv"),
             ),
         };
         std::fs::create_dir_all(&dir)?;
         std::fs::write(&file, &buf)?;
 
-        // 若检测到 Oh My Zsh，同步安装到 ~/.oh-my-zsh/custom/completions/_bt（默认已在 fpath 中，无需手改 .zshrc）
+        // 若检测到 Oh My Zsh，同步安装到 ~/.oh-my-zsh/custom/completions/_bit（默认已在 fpath 中，无需手改 .zshrc）
         let mut omz_installed = None;
         if matches!(shell, Shell::Zsh) {
             if home.join(".oh-my-zsh").is_dir() {
                 let omz_dir = home.join(".oh-my-zsh/custom/completions");
-                let omz_file = omz_dir.join("_bt");
+                let omz_file = omz_dir.join("_bit");
                 if std::fs::create_dir_all(&omz_dir).is_ok()
                     && std::fs::write(&omz_file, &buf).is_ok()
                 {
                     omz_installed = Some(omz_file);
                 }
             }
-            // 清理旧的 ~/.zcompdump* 缓存，避免 ~/.zshrc 中使用 `compinit -C` 时跳过新安装的 _bt
+            // 清理旧的 ~/.zcompdump* 缓存，避免 ~/.zshrc 中使用 `compinit -C` 时跳过新安装的 _bit
             if let Ok(entries) = std::fs::read_dir(&home) {
                 for entry in entries.flatten() {
                     if let Some(name) = entry.file_name().to_str()
@@ -134,7 +134,7 @@ pub fn handle_completions(shell: Option<Shell>, install: bool) -> Result<()> {
                 Shell::Bash => user_info!("请执行 source {} 或重新打开终端生效", file.display()),
                 Shell::Fish => user_info!("重新打开 fish 终端即可生效"),
                 Shell::PowerShell => user_info!("请在 PowerShell $PROFILE 中添加 `. {}` 生效", file.display()),
-                Shell::Elvish => user_info!("请在 ~/.config/elvish/rc.elv 中添加 `use bt` 生效"),
+                Shell::Elvish => user_info!("请在 ~/.config/elvish/rc.elv 中添加 `use bit` 生效"),
             }
         }
     } else if crate::cli::output::is_json() {
@@ -168,7 +168,7 @@ mod tests {
             let bytes = generate_completion_script(shell);
             let script = String::from_utf8(bytes).unwrap();
             assert!(!script.trim().is_empty(), "{shell:?} script was empty");
-            assert!(script.contains("bt"), "{shell:?} script missing 'bt'");
+            assert!(script.contains("bit"), "{shell:?} script missing 'bit'");
         }
     }
 }

@@ -15,7 +15,7 @@ fn t1_f01_01() {
     let env = TestEnv::new();
     let out = env.run_bt(&["--json"]);
     let v = out.assert_json_ok();
-    assert_eq!(v["name"], "bt");
+    assert_eq!(v["name"], "bit");
     assert_eq!(v["package"], "bili-tools");
     assert_eq!(v["version"], env!("CARGO_PKG_VERSION"));
     let mods: Vec<&str> = v["modules"]
@@ -48,7 +48,7 @@ fn t1_f01_02() {
     let env = TestEnv::new();
     let out = env.run_bt(&["--json", "--help"]);
     let v = out.assert_json_ok();
-    assert_eq!(v["name"], "bt");
+    assert_eq!(v["name"], "bit");
     assert!(v["modules"].is_array());
     out.assert_no_ansi();
     assert!(
@@ -65,7 +65,7 @@ fn t1_f01_03() {
     let out = env.run_bt_env(&["--no-color", "-V"], &[("TERM", "xterm-256color")]);
     out.assert_exit(0)
         .assert_no_ansi()
-        .assert_stdout_contains("bt")
+        .assert_stdout_contains("bit")
         .assert_stdout_contains(env!("CARGO_PKG_VERSION"));
     assert!(out.stderr.is_empty(), "expected empty stderr: {}", out.stderr);
 }
@@ -557,13 +557,13 @@ fn t1_f05_06() {
 
     let ps = env.run_bt(&["completions", "powershell"]);
     ps.assert_exit(0)
-        .assert_stdout_contains("bt")
+        .assert_stdout_contains("bit")
         .assert_stdout_contains("Register-ArgumentCompleter");
     assert!(ps.stderr.is_empty());
 
     let elv = env.run_bt(&["completions", "elvish"]);
     elv.assert_exit(0)
-        .assert_stdout_contains("bt")
+        .assert_stdout_contains("bit")
         .assert_stdout_contains("edit:completion:arg-completer");
     assert!(elv.stderr.is_empty());
 
@@ -571,7 +571,7 @@ fn t1_f05_06() {
     let v = zsh.assert_json_ok();
     assert_eq!(v["installed"], true);
     assert_eq!(v["shell"], "zsh");
-    let installed_path = env.home_dir().join(".zsh/completions/_bt");
+    let installed_path = env.home_dir().join(".zsh/completions/_bit");
     assert_eq!(v["path"], installed_path.display().to_string());
     assert!(
         installed_path.exists()

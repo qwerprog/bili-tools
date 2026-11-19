@@ -155,7 +155,7 @@ enum UiMsg {
     SendErr { err: String },
 }
 
-/// 流式监听模式 (`bt live danmaku [ROOM] -f`)：持续输出弹幕流或 NDJSON 事件流
+/// 流式监听模式 (`bit live danmaku [ROOM] -f`)：持续输出弹幕流或 NDJSON 事件流
 pub fn run_follow_stream(
     ctx: RoomInitialContext,
     cookies: Option<Cookies>,
@@ -375,7 +375,7 @@ fn format_follow_line(ev: &LiveEvent, use_color: bool) -> Option<String> {
     }
 }
 
-/// 看发一体全屏终端聊天室 TUI (`bt live chat [ROOM]` / `bt live danmaku -i`)
+/// 看发一体全屏终端聊天室 TUI (`bit live chat [ROOM]` / `bit live danmaku -i`)
 pub fn run_live_chat_tui(
     ctx: RoomInitialContext,
     cookies: Option<Cookies>,
@@ -383,13 +383,13 @@ pub fn run_live_chat_tui(
 ) -> Result<()> {
     if is_json() {
         return Err(BiliLiveError::Input(
-            "交互式弹幕聊天室不支持 --json 模式；如需 JSON 弹幕流请使用 `bt --json live danmaku <ROOM> -f`"
+            "交互式弹幕聊天室不支持 --json 模式；如需 JSON 弹幕流请使用 `bit --json live danmaku <ROOM> -f`"
                 .to_string(),
         ));
     }
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Err(BiliLiveError::Input(
-            "交互式弹幕聊天室需要交互式终端 (TTY)；管道环境请使用 `bt live danmaku <ROOM> -f`"
+            "交互式弹幕聊天室需要交互式终端 (TTY)；管道环境请使用 `bit live danmaku <ROOM> -f`"
                 .to_string(),
         ));
     }
@@ -932,7 +932,7 @@ pub fn run_live_chat_tui(
                                         time: now_hhmmss(),
                                         kind: FeedItemKind::System {
                                             is_error: true,
-                                            message: "当前未登录，无法发送弹幕；请退出后执行 `bt auth login`"
+                                            message: "当前未登录，无法发送弹幕；请退出后执行 `bit auth login`"
                                                 .to_string(),
                                         },
                                     },
@@ -948,7 +948,7 @@ pub fn run_live_chat_tui(
                                         time: now_hhmmss(),
                                         kind: FeedItemKind::System {
                                             is_error: true,
-                                            message: "当前凭证缺少 CSRF (bili_jct)，请执行 `bt auth login` 重新登录"
+                                            message: "当前凭证缺少 CSRF (bili_jct)，请执行 `bit auth login` 重新登录"
                                                 .to_string(),
                                         },
                                     },
@@ -1209,7 +1209,7 @@ fn render_tui_frame(state: RenderState<'_>) -> Result<()> {
         let placeholder = if state.can_send {
             "输入弹幕内容，按 Enter 直接发送到直播间..."
         } else {
-            "当前未登录，仅可观看实时弹幕（执行 bt auth login 后可发言）"
+            "当前未登录，仅可观看实时弹幕（执行 bit auth login 后可发言）"
         };
         let ph_padded = pad_to_width(&truncate_to_width(placeholder, text_slots), text_slots);
         if use_color {

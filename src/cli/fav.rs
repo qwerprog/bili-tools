@@ -21,7 +21,7 @@ pub(crate) fn resolve_own_fav_mid() -> Result<(i64, crate::auth::cookies::Cookie
         let mid = info["data"]["mid"].as_i64().unwrap_or(0);
         if !is_login || mid <= 0 {
             return Err(BiliLiveError::Auth(
-                "当前登录状态无效，请重新执行 `bt auth login`".to_string(),
+                "当前登录状态无效，请重新执行 `bit auth login`".to_string(),
             ));
         }
         cookies.dede_user_id = mid.to_string();

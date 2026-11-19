@@ -16,7 +16,7 @@ pub fn bili_clap_styles() -> Styles {
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "bt",
+    name = "bit",
     author,
     version,
     about = "B站命令行工具箱 (bili-tools)",
@@ -1290,7 +1290,7 @@ mod tests {
 
     #[test]
     fn test_bare_bt_shows_welcome_without_error() {
-        let cli = Cli::try_parse_from(["bt"]).unwrap();
+        let cli = Cli::try_parse_from(["bit"]).unwrap();
         assert!(cli.command.is_none());
         assert!(!cli.json);
         assert!(!cli.quiet);
@@ -1298,8 +1298,8 @@ mod tests {
 
     #[test]
     fn test_cli_parsing_subcommands() {
-        // bt --json auth status
-        let cli = Cli::try_parse_from(["bt", "--json", "auth", "status"]).unwrap();
+        // bit --json auth status
+        let cli = Cli::try_parse_from(["bit", "--json", "auth", "status"]).unwrap();
         assert!(cli.json);
         assert!(!cli.quiet);
         assert!(matches!(
@@ -1307,8 +1307,8 @@ mod tests {
             Some(Commands::Auth(AuthCommands::Status))
         ));
 
-        // bt -q live start -a 123 -t "Test" -y
-        let cli = Cli::try_parse_from(["bt", "-q", "live", "start", "-a", "123", "-t", "Test", "-y"]).unwrap();
+        // bit -q live start -a 123 -t "Test" -y
+        let cli = Cli::try_parse_from(["bit", "-q", "live", "start", "-a", "123", "-t", "Test", "-y"]).unwrap();
         assert!(!cli.json);
         assert!(cli.quiet);
         assert!(cli.yes);
@@ -1319,8 +1319,8 @@ mod tests {
             panic!("expected LiveCommands::Start");
         }
 
-        // bt search video "Rust" --page 2
-        let cli = Cli::try_parse_from(["bt", "search", "video", "Rust", "--page", "2"]).unwrap();
+        // bit search video "Rust" --page 2
+        let cli = Cli::try_parse_from(["bit", "search", "video", "Rust", "--page", "2"]).unwrap();
         if let Some(Commands::Search(SearchCommands::Video { keyword, page, .. })) = cli.command {
             assert_eq!(keyword, "Rust");
             assert_eq!(page, 2);
@@ -1328,8 +1328,8 @@ mod tests {
             panic!("expected SearchCommands::Video");
         }
 
-        // bt video coin BV1xx -n 2 --also-like
-        let cli = Cli::try_parse_from(["bt", "video", "coin", "BV1xx", "-n", "2", "--also-like"]).unwrap();
+        // bit video coin BV1xx -n 2 --also-like
+        let cli = Cli::try_parse_from(["bit", "video", "coin", "BV1xx", "-n", "2", "--also-like"]).unwrap();
         if let Some(Commands::Video(VideoCommands::Coin { video, num, also_like })) = cli.command {
             assert_eq!(video, "BV1xx");
             assert_eq!(num, 2);
@@ -1338,8 +1338,8 @@ mod tests {
             panic!("expected VideoCommands::Coin");
         }
 
-        // bt fav export 12345 -o /tmp/test.csv --format csv
-        let cli = Cli::try_parse_from(["bt", "fav", "export", "12345", "-o", "/tmp/test.csv", "--format", "csv"]).unwrap();
+        // bit fav export 12345 -o /tmp/test.csv --format csv
+        let cli = Cli::try_parse_from(["bit", "fav", "export", "12345", "-o", "/tmp/test.csv", "--format", "csv"]).unwrap();
         if let Some(Commands::Fav(FavCommands::Export { media_id, output, format })) = cli.command {
             assert_eq!(media_id, "12345");
             assert_eq!(output, Some("/tmp/test.csv".to_string()));
@@ -1348,26 +1348,26 @@ mod tests {
             panic!("expected FavCommands::Export");
         }
 
-        // bt later clear --viewed-only
-        let cli = Cli::try_parse_from(["bt", "later", "clear", "--viewed-only"]).unwrap();
+        // bit later clear --viewed-only
+        let cli = Cli::try_parse_from(["bit", "later", "clear", "--viewed-only"]).unwrap();
         if let Some(Commands::Later(LaterCommands::Clear { viewed_only })) = cli.command {
             assert!(viewed_only);
         } else {
             panic!("expected LaterCommands::Clear");
         }
 
-        // bt history list --limit 10 -c archive
-        let cli = Cli::try_parse_from(["bt", "history", "list", "--limit", "10", "-c", "archive"]).unwrap();
+        // bit history list --limit 10 -c archive
+        let cli = Cli::try_parse_from(["bit", "history", "list", "--limit", "10", "-c", "archive"]).unwrap();
         if let Some(Commands::History(HistoryCommands::List { limit, category, .. })) = cli.command {
             assert_eq!(limit, 10);
             assert_eq!(category, Some(HistoryCategory::Archive));
         } else {
             panic!("expected HistoryCommands::List");
         }
-        assert!(Cli::try_parse_from(["bt", "history", "list", "-t", "archive"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "history", "list", "-t", "archive"]).is_err());
 
-        // bt completions zsh --install
-        let cli = Cli::try_parse_from(["bt", "completions", "zsh", "--install"]).unwrap();
+        // bit completions zsh --install
+        let cli = Cli::try_parse_from(["bit", "completions", "zsh", "--install"]).unwrap();
         if let Some(Commands::Completions {
             shell,
             install,
@@ -1385,9 +1385,9 @@ mod tests {
 
     #[test]
     fn test_legacy_top_level_commands_are_rejected() {
-        assert!(Cli::try_parse_from(["bt", "start"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "stop"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "status"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "start"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "stop"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "status"]).is_err());
     }
 
     #[test]
@@ -1399,7 +1399,7 @@ mod tests {
     #[test]
     fn test_m1_global_flags_and_new_subcommands() {
         let cli = Cli::try_parse_from([
-            "bt",
+            "bit",
             "--no-color",
             "-y",
             "-u",
@@ -1418,7 +1418,7 @@ mod tests {
         ));
 
         let cli = Cli::try_parse_from([
-            "bt",
+            "bit",
             "auth",
             "login",
             "--method",
@@ -1444,14 +1444,14 @@ mod tests {
             })) if s == "s1" && j == "j1" && d == "42"
         ));
 
-        let daily = Cli::try_parse_from(["bt", "--json", "auth", "daily"]).unwrap();
+        let daily = Cli::try_parse_from(["bit", "--json", "auth", "daily"]).unwrap();
         assert!(daily.json);
         assert!(matches!(
             daily.command,
             Some(Commands::Auth(AuthCommands::Daily))
         ));
 
-        let ps = Cli::try_parse_from(["bt", "completions", "powershell"]).unwrap();
+        let ps = Cli::try_parse_from(["bit", "completions", "powershell"]).unwrap();
         assert!(matches!(
             ps.command,
             Some(Commands::Completions {
@@ -1461,7 +1461,7 @@ mod tests {
             })
         ));
 
-        let elv = Cli::try_parse_from(["bt", "completions", "elvish"]).unwrap();
+        let elv = Cli::try_parse_from(["bit", "completions", "elvish"]).unwrap();
         assert!(matches!(
             elv.command,
             Some(Commands::Completions {
@@ -1475,47 +1475,47 @@ mod tests {
     #[test]
     fn test_m2_live_refactored_and_new_subcommands() {
         // live title <TITLE> (single required positional; -t rejected; bare rejected)
-        let cli = Cli::try_parse_from(["bt", "live", "title", "新标题"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "live", "title", "新标题"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Live(LiveCommands::Title { ref title })) if title == "新标题"
         ));
-        assert!(Cli::try_parse_from(["bt", "live", "title"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "live", "title", "-t", "x"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "live", "title"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "live", "title", "-t", "x"]).is_err());
 
         // live area [KEYWORD] (-k rejected)
-        let cli = Cli::try_parse_from(["bt", "live", "area"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "live", "area"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Live(LiveCommands::Area { keyword: None }))
         ));
-        let cli = Cli::try_parse_from(["bt", "live", "area", "游戏"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "live", "area", "游戏"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Live(LiveCommands::Area { keyword: Some(ref k) })) if k == "游戏"
         ));
-        assert!(Cli::try_parse_from(["bt", "live", "area", "-k", "游戏"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "live", "area", "-k", "游戏"]).is_err());
 
         // live following range validation
-        assert!(Cli::try_parse_from(["bt", "live", "following", "--page", "1", "--page-size", "20"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "live", "following", "--page", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "live", "following", "--page-size", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "live", "following", "--page-size", "21"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "live", "following", "--page", "1", "--page-size", "20"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "live", "following", "--page", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "live", "following", "--page-size", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "live", "following", "--page-size", "21"]).is_err());
 
         // live info [ROOM]
-        let cli = Cli::try_parse_from(["bt", "live", "info"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "live", "info"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Live(LiveCommands::Info { room: None }))
         ));
-        let cli = Cli::try_parse_from(["bt", "live", "info", "https://live.bilibili.com/76"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "live", "info", "https://live.bilibili.com/76"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Live(LiveCommands::Info { room: Some(ref r) })) if r == "https://live.bilibili.com/76"
         ));
 
         // live stream <ROOM> [-Q/--quality] (global -q/--quiet does not collide)
-        let cli = Cli::try_parse_from(["bt", "-q", "live", "stream", "76", "-Q", "400"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "-q", "live", "stream", "76", "-Q", "400"]).unwrap();
         assert!(cli.quiet);
         assert!(matches!(
             cli.command,
@@ -1523,7 +1523,7 @@ mod tests {
         ));
 
         // live danmaku <ROOM> [--limit 1..=50] [-f] [-i] [--no-enter]
-        let cli = Cli::try_parse_from(["bt", "live", "danmaku", "76", "--limit", "50"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "live", "danmaku", "76", "--limit", "50"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Live(LiveCommands::Danmaku {
@@ -1534,7 +1534,7 @@ mod tests {
                 no_enter: false,
             })) if room == "76"
         ));
-        let cli_chat = Cli::try_parse_from(["bt", "live", "chat", "76", "--no-enter"]).unwrap();
+        let cli_chat = Cli::try_parse_from(["bit", "live", "chat", "76", "--no-enter"]).unwrap();
         assert!(matches!(
             cli_chat.command,
             Some(Commands::Live(LiveCommands::Chat {
@@ -1543,12 +1543,12 @@ mod tests {
                 history: 15,
             })) if r == "76"
         ));
-        assert!(Cli::try_parse_from(["bt", "live", "danmaku", "76", "--limit", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "live", "danmaku", "76", "--limit", "51"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "live", "danmaku", "76", "-f", "-i"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "live", "danmaku", "76", "--limit", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "live", "danmaku", "76", "--limit", "51"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "live", "danmaku", "76", "-f", "-i"]).is_err());
 
         // live send <ROOM> <MESSAGE>
-        let cli = Cli::try_parse_from(["bt", "live", "send", "76", "hello"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "live", "send", "76", "hello"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Live(LiveCommands::Send { ref room, ref message })) if room == "76" && message == "hello"
@@ -1556,7 +1556,7 @@ mod tests {
 
         // live record <ROOM> [-o] [-Q] [-d] [--danmaku] [--watch]
         let cli = Cli::try_parse_from([
-            "bt", "live", "record", "76", "-o", "out.flv", "-Q", "400", "-d", "10s", "--danmaku", "-w", "--interval", "15", "--once",
+            "bit", "live", "record", "76", "-o", "out.flv", "-Q", "400", "-d", "10s", "--danmaku", "-w", "--interval", "15", "--once",
         ])
         .unwrap();
         assert!(matches!(
@@ -1578,7 +1578,7 @@ mod tests {
     #[test]
     fn test_m2_search_fav_later_history_subcommands() {
         // search video/user ValueEnum & page/limit range validation
-        let cli = Cli::try_parse_from(["bt", "search", "video", "rust", "--order", "click", "--page", "2"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "search", "video", "rust", "--order", "click", "--page", "2"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Search(SearchCommands::Video {
@@ -1587,36 +1587,36 @@ mod tests {
                 ..
             }))
         ));
-        assert!(Cli::try_parse_from(["bt", "search", "video", "rust", "--order", "bad"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "search", "video", "rust", "--page", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "search", "video", "rust", "--order", "bad"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "search", "video", "rust", "--page", "0"]).is_err());
 
-        let cli = Cli::try_parse_from(["bt", "search", "user", "up", "--order", "default"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "search", "user", "up", "--order", "default"]).unwrap();
         if let Some(Commands::Search(SearchCommands::User { order: Some(o), .. })) = cli.command {
             assert_eq!(o, SearchUserOrder::Default);
             assert_eq!(o.as_api_str(), "0");
         } else {
             panic!("expected SearchCommands::User");
         }
-        assert!(Cli::try_parse_from(["bt", "search", "user", "up", "--order", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "search", "user", "up", "--page", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "search", "live", "lol", "--page", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "search", "user", "up", "--order", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "search", "user", "up", "--page", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "search", "live", "lol", "--page", "0"]).is_err());
 
-        assert!(Cli::try_parse_from(["bt", "search", "hot", "--limit", "1"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "search", "hot", "--limit", "50"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "search", "hot", "--limit", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "search", "hot", "--limit", "51"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "search", "hot", "--limit", "1"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "search", "hot", "--limit", "50"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "search", "hot", "--limit", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "search", "hot", "--limit", "51"]).is_err());
 
         // fav CRUD & URL inputs & ValueEnum format & range checks
-        let cli = Cli::try_parse_from(["bt", "fav", "list", "--mid", "https://space.bilibili.com/42"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "fav", "list", "--mid", "https://space.bilibili.com/42"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Fav(FavCommands::List { mid: Some(ref m) })) if m == "https://space.bilibili.com/42"
         ));
-        assert!(Cli::try_parse_from(["bt", "fav", "show", "ml100", "--page", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "fav", "show", "ml100", "--page-size", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "fav", "show", "ml100", "--page-size", "21"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "fav", "show", "ml100", "--page", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "fav", "show", "ml100", "--page-size", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "fav", "show", "ml100", "--page-size", "21"]).is_err());
 
-        let cli = Cli::try_parse_from(["bt", "fav", "export", "ml100", "--format", "txt"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "fav", "export", "ml100", "--format", "txt"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Fav(FavCommands::Export {
@@ -1624,47 +1624,47 @@ mod tests {
                 ..
             }))
         ));
-        assert!(Cli::try_parse_from(["bt", "fav", "export", "ml100", "--format", "xml"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "fav", "export", "ml100", "--format", "xml"]).is_err());
 
-        assert!(Cli::try_parse_from(["bt", "fav", "add", "100", "BV1xx"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "fav", "remove", "100", "BV1xx"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "fav", "clean", "100"]).is_ok());
-        let cli = Cli::try_parse_from(["bt", "fav", "create", "MyFav", "--private"]).unwrap();
+        assert!(Cli::try_parse_from(["bit", "fav", "add", "100", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "fav", "remove", "100", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "fav", "clean", "100"]).is_ok());
+        let cli = Cli::try_parse_from(["bit", "fav", "create", "MyFav", "--private"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Fav(FavCommands::Create { ref title, private: true })) if title == "MyFav"
         ));
-        assert!(Cli::try_parse_from(["bt", "fav", "delete", "100"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "fav", "delete", "100"]).is_ok());
 
         // later remove & history CRUD
-        assert!(Cli::try_parse_from(["bt", "later", "remove", "BV1xx"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "history", "list", "--limit", "1", "-c", "live"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "history", "list", "--limit", "30"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "history", "list", "--limit", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "history", "list", "--limit", "31"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "history", "list", "-c", "invalid"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "history", "delete", "BV1xx"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "history", "clear"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "later", "remove", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "history", "list", "--limit", "1", "-c", "live"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "history", "list", "--limit", "30"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "history", "list", "--limit", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "history", "list", "--limit", "31"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "history", "list", "-c", "invalid"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "history", "delete", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "history", "clear"]).is_ok());
     }
 
     #[test]
     fn test_m3_video_subcommands_validation_and_conflicts() {
         // video coin -n 1..=2
-        assert!(Cli::try_parse_from(["bt", "video", "coin", "BV1xx", "-n", "1"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "video", "coin", "BV1xx", "-n", "2"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "video", "coin", "BV1xx", "-n", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "video", "coin", "BV1xx", "-n", "3"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "coin", "BV1xx", "-n", "1"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "coin", "BV1xx", "-n", "2"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "coin", "BV1xx", "-n", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "coin", "BV1xx", "-n", "3"]).is_err());
 
         // video streams / subtitle / summary / tags / related
-        let cli = Cli::try_parse_from(["bt", "video", "streams", "BV1xx", "-p", "2"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "video", "streams", "BV1xx", "-p", "2"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Video(VideoCommands::Streams { ref video, page: Some(2) })) if video == "BV1xx"
         ));
-        assert!(Cli::try_parse_from(["bt", "video", "streams", "BV1xx", "-p", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "streams", "BV1xx", "-p", "0"]).is_err());
 
         let cli = Cli::try_parse_from([
-            "bt", "video", "subtitle", "BV1xx", "--lang", "zh-Hans", "--format", "srt", "-o", "out.srt",
+            "bit", "video", "subtitle", "BV1xx", "--lang", "zh-Hans", "--format", "srt", "-o", "out.srt",
         ])
         .unwrap();
         assert!(matches!(
@@ -1674,17 +1674,17 @@ mod tests {
                 ..
             }))
         ));
-        assert!(Cli::try_parse_from(["bt", "video", "subtitle", "BV1xx", "-p", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "video", "subtitle", "BV1xx", "--format", "vtt"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "subtitle", "BV1xx", "-p", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "subtitle", "BV1xx", "--format", "vtt"]).is_err());
 
-        assert!(Cli::try_parse_from(["bt", "video", "summary", "BV1xx", "-p", "1"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "video", "summary", "BV1xx", "-p", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "video", "tags", "BV1xx"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "video", "related", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "summary", "BV1xx", "-p", "1"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "summary", "BV1xx", "-p", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "tags", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "related", "BV1xx"]).is_ok());
 
         // video danmaku / comments / comment
         let cli = Cli::try_parse_from([
-            "bt", "video", "danmaku", "BV1xx", "-p", "2", "--format", "ass", "-o", "dm.ass",
+            "bit", "video", "danmaku", "BV1xx", "-p", "2", "--format", "ass", "-o", "dm.ass",
         ])
         .unwrap();
         assert!(matches!(
@@ -1695,11 +1695,11 @@ mod tests {
                 ..
             }))
         ));
-        assert!(Cli::try_parse_from(["bt", "video", "danmaku", "BV1xx", "--format", "bad"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "video", "danmaku", "BV1xx", "-p", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "danmaku", "BV1xx", "--format", "bad"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "danmaku", "BV1xx", "-p", "0"]).is_err());
 
         let cli = Cli::try_parse_from([
-            "bt", "video", "comments", "BV1xx", "--page", "2", "--sort", "time",
+            "bit", "video", "comments", "BV1xx", "--page", "2", "--sort", "time",
         ])
         .unwrap();
         assert!(matches!(
@@ -1712,19 +1712,19 @@ mod tests {
         ));
         assert_eq!(CommentSort::Hot.as_api_str(), "2");
         assert_eq!(CommentSort::Time.as_api_str(), "0");
-        assert!(Cli::try_parse_from(["bt", "video", "comments", "BV1xx", "--page", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "comments", "BV1xx", "--page", "0"]).is_err());
 
-        assert!(Cli::try_parse_from(["bt", "video", "comment", "post", "BV1xx", "nice"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "comment", "post", "BV1xx", "nice"]).is_ok());
         assert!(
-            Cli::try_parse_from(["bt", "video", "comment", "like", "BV1xx", "123", "--cancel"]).is_ok()
+            Cli::try_parse_from(["bit", "video", "comment", "like", "BV1xx", "123", "--cancel"]).is_ok()
         );
-        assert!(Cli::try_parse_from(["bt", "video", "comment", "like", "BV1xx", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "video", "comment", "delete", "BV1xx", "123"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "video", "comment", "delete", "BV1xx", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "comment", "like", "BV1xx", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "comment", "delete", "BV1xx", "123"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "comment", "delete", "BV1xx", "0"]).is_err());
 
         // video download: -Q vs global -q, --audio-only vs --video-only conflict, -e validation
         let cli = Cli::try_parse_from([
-            "bt", "-q", "video", "download", "BV1xx", "-p", "1-2", "-Q", "80", "-e", "hevc",
+            "bit", "-q", "video", "download", "BV1xx", "-p", "1-2", "-Q", "80", "-e", "hevc",
             "-o", "{bvid}_p{page}.mp4", "--skip-mux", "--danmaku", "--subtitle", "--cover",
         ])
         .unwrap();
@@ -1743,24 +1743,24 @@ mod tests {
         ));
         assert!(
             Cli::try_parse_from([
-                "bt", "video", "download", "BV1xx", "--audio-only", "--video-only",
+                "bit", "video", "download", "BV1xx", "--audio-only", "--video-only",
             ])
             .is_err()
         );
-        assert!(Cli::try_parse_from(["bt", "video", "download", "BV1xx", "-e", "vp9"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "video", "download", "BV1xx", "-e", "vp9"]).is_err());
     }
 
     #[test]
     fn test_m4_user_feed_rank_parsing_and_validation() {
         // user info / videos / dynamics / follow / unfollow
-        let cli_self = Cli::try_parse_from(["bt", "user", "info"]).unwrap();
+        let cli_self = Cli::try_parse_from(["bit", "user", "info"]).unwrap();
         assert!(matches!(
             cli_self.command,
             Some(Commands::User(UserCommands::Info { user: None }))
         ));
 
         let cli = Cli::try_parse_from([
-            "bt",
+            "bit",
             "user",
             "info",
             "https://space.bilibili.com/123456",
@@ -1772,7 +1772,7 @@ mod tests {
         ));
 
         let cli = Cli::try_parse_from([
-            "bt",
+            "bit",
             "user",
             "videos",
             "123456",
@@ -1800,13 +1800,13 @@ mod tests {
         assert_eq!(UserVideoOrder::Click.as_api_str(), "click");
         assert_eq!(UserVideoOrder::Stow.as_api_str(), "stow");
 
-        assert!(Cli::try_parse_from(["bt", "user", "videos", "123", "--page", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "user", "videos", "123", "--page-size", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "user", "videos", "123", "--page-size", "51"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "user", "videos", "123", "--order", "bad"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "user", "videos", "123", "--page", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "user", "videos", "123", "--page-size", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "user", "videos", "123", "--page-size", "51"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "user", "videos", "123", "--order", "bad"]).is_err());
 
         let cli = Cli::try_parse_from([
-            "bt",
+            "bit",
             "user",
             "dynamics",
             "123456",
@@ -1822,11 +1822,11 @@ mod tests {
             })) if user == "123456" && off == "9000000001"
         ));
 
-        assert!(Cli::try_parse_from(["bt", "user", "follow", "123456"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "user", "unfollow", "123456"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "user", "follow", "123456"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "user", "unfollow", "123456"]).is_ok());
 
         // feed
-        let cli = Cli::try_parse_from(["bt", "feed", "--type", "video", "--offset", "cur1"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "feed", "--type", "video", "--offset", "cur1"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Feed {
@@ -1838,10 +1838,10 @@ mod tests {
         assert_eq!(FeedType::Video.as_api_str(), "video");
         assert_eq!(FeedType::Pgc.as_api_str(), "pgc");
         assert_eq!(FeedType::Article.as_api_str(), "article");
-        assert!(Cli::try_parse_from(["bt", "feed", "--type", "bogus"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "feed", "--type", "bogus"]).is_err());
 
         // rank video / popular
-        let cli = Cli::try_parse_from(["bt", "rank", "video", "--rid", "36", "--type", "rookie"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "rank", "video", "--rid", "36", "--type", "rookie"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Rank(RankCommands::Video {
@@ -1852,9 +1852,9 @@ mod tests {
         assert_eq!(RankType::All.as_api_str(), "all");
         assert_eq!(RankType::Rookie.as_api_str(), "rookie");
         assert_eq!(RankType::Origin.as_api_str(), "origin");
-        assert!(Cli::try_parse_from(["bt", "rank", "video", "--type", "bogus"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "rank", "video", "--type", "bogus"]).is_err());
 
-        let cli = Cli::try_parse_from(["bt", "rank", "popular", "--page", "1", "--page-size", "10"]).unwrap();
+        let cli = Cli::try_parse_from(["bit", "rank", "popular", "--page", "1", "--page-size", "10"]).unwrap();
         assert!(matches!(
             cli.command,
             Some(Commands::Rank(RankCommands::Popular {
@@ -1862,16 +1862,16 @@ mod tests {
                 page_size: 10,
             }))
         ));
-        assert!(Cli::try_parse_from(["bt", "rank", "popular", "--page", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "rank", "popular", "--page-size", "0"]).is_err());
-        assert!(Cli::try_parse_from(["bt", "rank", "popular", "--page-size", "51"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "rank", "popular", "--page", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "rank", "popular", "--page-size", "0"]).is_err());
+        assert!(Cli::try_parse_from(["bit", "rank", "popular", "--page-size", "51"]).is_err());
     }
 
     #[test]
     fn test_semantic_qualities_codec_aliases_and_subcommand_aliases() {
         // Semantic video & live qualities resolve without semantic inversion
         let dl = Cli::try_parse_from([
-            "bt", "-vv", "video", "dl", "BV1xx", "-Q", "1080p", "-e", "h265", "--audio-quality", "flac",
+            "bit", "-vv", "video", "dl", "BV1xx", "-Q", "1080p", "-e", "h265", "--audio-quality", "flac",
         ])
         .unwrap();
         assert_eq!(dl.verbose, 2);
@@ -1885,7 +1885,7 @@ mod tests {
             }))
         ));
 
-        let dl_h264 = Cli::try_parse_from(["bt", "video", "download", "BV1xx", "-Q", "4k", "-e", "h264"]).unwrap();
+        let dl_h264 = Cli::try_parse_from(["bit", "video", "download", "BV1xx", "-Q", "4k", "-e", "h264"]).unwrap();
         assert!(matches!(
             dl_h264.command,
             Some(Commands::Video(VideoCommands::Download {
@@ -1895,13 +1895,13 @@ mod tests {
             }))
         ));
 
-        let live_st = Cli::try_parse_from(["bt", "live", "streams", "76", "-Q", "1080p"]).unwrap();
+        let live_st = Cli::try_parse_from(["bit", "live", "streams", "76", "-Q", "1080p"]).unwrap();
         assert!(matches!(
             live_st.command,
             Some(Commands::Live(LiveCommands::Stream { quality: 400, .. }))
         ));
 
-        let live_smooth = Cli::try_parse_from(["bt", "live", "record", "76", "-Q", "smooth"]).unwrap();
+        let live_smooth = Cli::try_parse_from(["bit", "live", "record", "76", "-Q", "smooth"]).unwrap();
         assert!(matches!(
             live_smooth.command,
             Some(Commands::Live(LiveCommands::Record { quality: 80, .. }))
@@ -1909,7 +1909,7 @@ mod tests {
 
         // --uid alias on auth login
         let login = Cli::try_parse_from([
-            "bt", "auth", "login", "-m", "cookie", "--sessdata", "s", "--bili-jct", "j", "--uid", "10086",
+            "bit", "auth", "login", "-m", "cookie", "--sessdata", "s", "--bili-jct", "j", "--uid", "10086",
         ])
         .unwrap();
         assert!(matches!(
@@ -1921,18 +1921,18 @@ mod tests {
         ));
 
         // ls / rm / remove aliases across fav, later, history
-        assert!(Cli::try_parse_from(["bt", "fav", "ls"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "fav", "rm", "100", "BV1xx"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "later", "ls"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "later", "rm", "BV1xx"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "later", "delete", "BV1xx"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "history", "ls", "--max", "123", "--view-at", "1700000000"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "history", "rm", "room:76"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "history", "remove", "cv12345"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "fav", "ls"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "fav", "rm", "100", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "later", "ls"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "later", "rm", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "later", "delete", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "history", "ls", "--max", "123", "--view-at", "1700000000"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "history", "rm", "room:76"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "history", "remove", "cv12345"]).is_ok());
 
         // video upload / append / studio / comments --root --full
         let up = Cli::try_parse_from([
-            "bt", "video", "up", "p1.mp4", "p2.mp4", "-t", "录播合集", "--tid", "122", "--tag", "Rust,Linux", "-l", "tx", "--limit", "4",
+            "bit", "video", "up", "p1.mp4", "p2.mp4", "-t", "录播合集", "--tid", "122", "--tag", "Rust,Linux", "-l", "tx", "--limit", "4",
         ])
         .unwrap();
         assert!(matches!(
@@ -1946,9 +1946,9 @@ mod tests {
                 ..
             })) if files.len() == 2 && t == "录播合集"
         ));
-        assert!(Cli::try_parse_from(["bt", "video", "append", "BV1xx", "p3.mp4", "-l", "bda2"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "video", "studio", "ls", "--status", "pubing"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "video", "archives", "show", "BV1xx"]).is_ok());
-        assert!(Cli::try_parse_from(["bt", "video", "comments", "BV1xx", "--root", "12345", "--full"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "append", "BV1xx", "p3.mp4", "-l", "bda2"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "studio", "ls", "--status", "pubing"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "archives", "show", "BV1xx"]).is_ok());
+        assert!(Cli::try_parse_from(["bit", "video", "comments", "BV1xx", "--root", "12345", "--full"]).is_ok());
     }
 }

@@ -64,21 +64,24 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
           New-Item -ItemType Directory -Path dist
-          Compress-Archive -Path target/${{ matrix.target_x86 }}/release/bt.exe -DestinationPath dist/bt-x86_64-windows.zip
-          Compress-Archive -Path target/${{ matrix.target_arm }}/release/bt.exe -DestinationPath dist/bt-arm64-windows.zip
+          Compress-Archive -Path target/${{ matrix.target_x86 }}/release/bit.exe -DestinationPath "dist/bit-v${version}-windows-amd64.zip"
+          Compress-Archive -Path target/${{ matrix.target_arm }}/release/bit.exe -DestinationPath "dist/bit-v${version}-windows-arm64.zip"
       - name: Package macOS
         if: matrix.platform == 'macos'
         run: |
+          VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
           mkdir -p dist
-          zip -j dist/bt-x86_64-macos.zip target/${{ matrix.target_x86 }}/release/bt
-          zip -j dist/bt-arm64-macos.zip target/${{ matrix.target_arm }}/release/bt
+          zip -j "dist/bit-v${VERSION}-darwin-amd64.zip" target/${{ matrix.target_x86 }}/release/bit
+          zip -j "dist/bit-v${VERSION}-darwin-arm64.zip" target/${{ matrix.target_arm }}/release/bit
       - name: Package Linux
         if: matrix.platform == 'linux'
         run: |
+          VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
           mkdir -p dist
-          tar -czf dist/bt-x86_64-linux.tar.gz -C target/${{ matrix.target_x86 }}/release bt
-          tar -czf dist/bt-arm64-linux.tar.gz -C target/${{ matrix.target_arm }}/release bt
+          tar -czf "dist/bit-v${VERSION}-linux-amd64.tar.gz" -C target/${{ matrix.target_x86 }}/release bit
+          tar -czf "dist/bit-v${VERSION}-linux-arm64.tar.gz" -C target/${{ matrix.target_arm }}/release bit
       - uses: actions/upload-artifact@v7
         with:
           name: bt-${{ matrix.platform }}
@@ -102,11 +105,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
           cd dist
-          for name in bt-x86_64-windows.zip bt-arm64-windows.zip bt-x86_64-macos.zip bt-arm64-macos.zip bt-x86_64-linux.tar.gz bt-arm64-linux.tar.gz; do
+          for name in "bit-v${VERSION}-windows-amd64.zip" "bit-v${VERSION}-windows-arm64.zip" "bit-v${VERSION}-darwin-amd64.zip" "bit-v${VERSION}-darwin-arm64.zip" "bit-v${VERSION}-linux-amd64.tar.gz" "bit-v${VERSION}-linux-arm64.tar.gz"; do
             test -s "$name"
           done
-          sha256sum bt-* > SHA256SUMS
+          sha256sum bit-* > SHA256SUMS
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "../docs/releases/${GITHUB_REF_NAME}.md" --draft
-          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" bt-* SHA256SUMS
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" bit-* SHA256SUMS
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -100,7 +100,7 @@ fn map_comment_api_error(code: i64, msg: &str, action: &str) -> BiliLiveError {
             "{action}失败 ({code}): 评论区已关闭或禁止操作 ({msg})"
         )),
         12006 => BiliLiveError::Api(format!(
-            "{action}失败 (12006): 当前视频下不存在该评论 RPID（请先运行 `bt video comments <VIDEO>` 查看真实的评论 RPID）"
+            "{action}失败 (12006): 当前视频下不存在该评论 RPID（请先运行 `bit video comments <VIDEO>` 查看真实的评论 RPID）"
         )),
         _ => BiliLiveError::Api(format!("{action}失败 ({code}): {msg}")),
     }

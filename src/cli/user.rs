@@ -260,7 +260,7 @@ fn resolve_user_or_self(user: Option<String>) -> Result<i64> {
                 return Ok(mid);
             }
             Err(crate::error::BiliLiveError::Auth(
-                "未能从当前凭证解析出用户 UID，请指定 <USER> 或重新执行 `bt auth login`"
+                "未能从当前凭证解析出用户 UID，请指定 <USER> 或重新执行 `bit auth login`"
                     .to_string(),
             ))
         }

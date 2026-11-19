@@ -1218,7 +1218,7 @@ fn t4_08_non_interactive_ci_and_agent_automation() {
     help_out.assert_no_ansi();
     assert!(help_out.stderr.trim().is_empty());
     let help_json = help_out.assert_json_ok();
-    assert_eq!(help_json["name"], "bt");
+    assert_eq!(help_json["name"], "bit");
     let modules = help_json["modules"].as_array().expect("modules array");
     for module in [
         "resolve",
@@ -1303,7 +1303,7 @@ fn t4_08_non_interactive_ci_and_agent_automation() {
     let comp_json = comp_out.assert_json_ok();
     assert_eq!(comp_json["installed"], true);
     assert_eq!(comp_json["shell"], "zsh");
-    let expected_zsh = env.home_dir().join(".zsh/completions/_bt");
+    let expected_zsh = env.home_dir().join(".zsh/completions/_bit");
     assert_eq!(
         comp_json["path"].as_str(),
         Some(expected_zsh.to_str().expect("utf8 zsh path"))
