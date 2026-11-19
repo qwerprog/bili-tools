@@ -1,12 +1,23 @@
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub fn mask_rtmp_code(code: &str) -> String {
-    if code.len() <= 10 {
-        return code.to_string();
+    let chars: Vec<char> = code.chars().collect();
+    let len = chars.len();
+    if len == 0 {
+        return String::new();
     }
-    let prefix = &code[..6];
-    let suffix = &code[code.len() - 4..];
-    let masked_length = code.len() - 10;
+    if len <= 4 {
+        return "*".repeat(len.max(3));
+    }
+    if len <= 10 {
+        let prefix: String = chars[..2].iter().collect();
+        let suffix: String = chars[len - 2..].iter().collect();
+        let masked_len = len.saturating_sub(4).max(3);
+        return format!("{prefix}{}...{suffix}", "*".repeat(masked_len));
+    }
+    let prefix: String = chars[..6].iter().collect();
+    let suffix: String = chars[len - 4..].iter().collect();
+    let masked_length = len - 10;
     format!(
         "{}{}...{}",
         prefix,
@@ -22,6 +33,9 @@ pub fn display_width(s: &str) -> usize {
 
 /// 按照终端显示宽度截断字符串。如果超出 max_width，则截断并在末尾添加单宽省略号 `…`
 pub fn truncate_to_width(s: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
     if display_width(s) <= max_width {
         return s.to_string();
     }
@@ -106,6 +120,53 @@ pub fn format_num(val: &serde_json::Value) -> String {
     }
 }
 
+/// 反转义常见 HTML 字符实体（如 B 站评论中的 `&#34;`、`&#39;`、`&quot;`、`&amp;`），单遍扫描避免二次解码
+pub fn unescape_html_entities(input: &str) -> String {
+    if !input.contains('&') {
+        return input.to_string();
+    }
+    let mut out = String::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'&'
+            && let Some(rel_semi) = input[i..].find(';')
+            && rel_semi <= 10
+        {
+            let ent = &input[i + 1..i + rel_semi];
+            let decoded = match ent {
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "quot" | "#34" | "#x22" | "#X22" => Some('"'),
+                "apos" | "#39" | "#x27" | "#X27" => Some('\''),
+                "nbsp" | "#160" => Some(' '),
+                _ if ent.starts_with('#') => {
+                    let code = if let Some(hex) = ent[1..]
+                        .strip_prefix('x')
+                        .or_else(|| ent[1..].strip_prefix('X'))
+                    {
+                        u32::from_str_radix(hex, 16).ok()
+                    } else {
+                        ent[1..].parse::<u32>().ok()
+                    };
+                    code.and_then(char::from_u32)
+                }
+                _ => None,
+            };
+            if let Some(ch) = decoded {
+                out.push(ch);
+                i += rel_semi + 1;
+                continue;
+            }
+        }
+        let ch = input[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
 /// 剥离所有 HTML 标签并转换常用转义实体
 pub fn strip_html_tags(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
@@ -121,13 +182,25 @@ pub fn strip_html_tags(input: &str) -> String {
         }
     }
 
-    out.replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&apos;", "'")
-        .replace("&nbsp;", " ")
+    unescape_html_entities(&out)
+}
+
+/// 清理文件名中的非法路径字符和控制字符（用于视频下载输出模板插值）
+pub fn sanitize_filename(name: &str) -> String {
+    let mut sanitized = String::with_capacity(name.len());
+    for c in name.chars() {
+        if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() {
+            sanitized.push('_');
+        } else {
+            sanitized.push(c);
+        }
+    }
+    let trimmed = sanitized.trim_matches(|c: char| c.is_whitespace() || c == '.');
+    if trimmed.is_empty() {
+        "video".to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -157,6 +230,13 @@ mod tests {
     }
 
     #[test]
+    fn test_truncate_to_width_zero_and_one() {
+        assert_eq!(truncate_to_width("abc", 0), "");
+        assert_eq!(truncate_to_width("中文", 0), "");
+        assert_eq!(truncate_to_width("abc", 1), "…");
+    }
+
+    #[test]
     fn test_format_timestamp() {
         // 1603285176 is 2020-10-21 20:59:36 UTC+8
         assert_eq!(format_timestamp(1603285176), "2020-10-21 20:59");
@@ -174,5 +254,51 @@ mod tests {
             strip_html_tags("<span style=\"color:red\">Title&#39;s</span>"),
             "Title's"
         );
+    }
+
+    #[test]
+    fn test_mask_rtmp_code_short_standard_and_utf8() {
+        assert_eq!(mask_rtmp_code(""), "");
+        assert_eq!(mask_rtmp_code("abc"), "***");
+        assert_eq!(mask_rtmp_code("abcd"), "****");
+
+        let short_secret = mask_rtmp_code("secret");
+        assert_ne!(short_secret, "secret");
+        assert!(short_secret.contains('*'));
+        assert!(short_secret.starts_with("se"));
+        assert!(short_secret.ends_with("et"));
+
+        let ten = mask_rtmp_code("1234567890");
+        assert_ne!(ten, "1234567890");
+        assert!(ten.starts_with("12"));
+        assert!(ten.ends_with("90"));
+        assert!(ten.contains('*'));
+
+        let standard = mask_rtmp_code("1234567890abcdef");
+        assert!(standard.starts_with("123456"));
+        assert!(standard.ends_with("cdef"));
+        assert!(standard.contains("******..."));
+
+        // Multi-byte UTF-8 must not panic on byte slicing
+        let utf8_short = mask_rtmp_code("秘密推流码测试字符");
+        assert!(utf8_short.starts_with("秘密"));
+        assert!(utf8_short.ends_with("字符"));
+        assert!(utf8_short.contains('*'));
+
+        let utf8_long = mask_rtmp_code("一二三四五六七八九十一二三四");
+        assert!(utf8_long.starts_with("一二三四五六"));
+        assert!(utf8_long.ends_with("一二三四"));
+        assert!(utf8_long.contains('*'));
+    }
+
+    #[test]
+    fn test_sanitize_filename() {
+        assert_eq!(sanitize_filename("A/B:C*?<>|\"test"), "A_B_C______test");
+        assert_eq!(sanitize_filename("hello\x00\n\tworld"), "hello___world");
+        assert_eq!(sanitize_filename("   ...  "), "video");
+        assert_eq!(sanitize_filename(". ."), "video");
+        assert_eq!(sanitize_filename(".."), "video");
+        assert_eq!(sanitize_filename("v1.0 release"), "v1.0 release");
+        assert_eq!(sanitize_filename("正常视频标题 123"), "正常视频标题 123");
     }
 }

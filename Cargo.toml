@@ -1,10 +1,9 @@
 [package]
 name = "bili-tools"
-version = "0.1.6"
+version = "1.0.0"
 edition = "2024"
 description = "B站工具箱 (Bilibili CLI toolbox)"
 repository = "https://github.com/qwerprog/bili-tools"
-homepage = "https://github.com/qwerprog/bili-tools"
 
 [[bin]]
 name = "bt"
@@ -55,3 +54,8 @@ tempfile = "3"
 # Web 登录需要保留多条 Set-Cookie；minreq 的响应头 HashMap 会覆盖它们。
 ureq = { version = "3.4", default-features = false, features = ["rustls"] }
 sha2 = "0.10"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+brotli-decompressor = "6"
+tungstenite = { version = "0.29", features = ["__rustls-tls", "url"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
+webpki-roots = "1"
