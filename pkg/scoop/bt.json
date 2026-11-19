@@ -1,16 +1,16 @@
 {
-  "version": "0.1.6",
+  "version": "1.0.0",
   "description": "B站工具箱 — 命令行多功能工具与一键开播/下播",
   "homepage": "https://github.com/qwerprog/bili-tools",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/qwerprog/bili-tools/releases/download/v0.1.6/bt-x86_64-windows.zip",
-      "hash": "8fc07f8db67eaac85f761d9356e74e69a6ffb444d12e19d1ab3c89dd2d7ce013"
+      "url": "https://github.com/QwerProg/bili-tools/releases/download/v1.0.0/bt-x86_64-windows.zip",
+      "hash": "cc3eb481b8c793a5a6555ca449fddd006c8257d7938c78a169a1ba9624b65d9c"
     },
     "arm64": {
-      "url": "https://github.com/qwerprog/bili-tools/releases/download/v0.1.6/bt-arm64-windows.zip",
-      "hash": "4104ab29eb74ddce50b081a967f8506470b52b6aba5c1a5e34fa720145cc9b6a"
+      "url": "https://github.com/QwerProg/bili-tools/releases/download/v1.0.0/bt-arm64-windows.zip",
+      "hash": "6c97a57daa97bf062bed18b019006da0cdac915c8a4cba8b1eac15992d9ecb8b"
     }
   },
   "bin": "bt.exe"
