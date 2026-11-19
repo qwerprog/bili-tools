@@ -25,7 +25,12 @@ pub fn cookies_path() -> io::Result<PathBuf> {
 pub fn data_dir() -> io::Result<PathBuf> {
     #[cfg(target_os = "macos")]
     let base = dirs::home_dir().map(|home| home.join(".config"));
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    let base = std::env::var_os("APPDATA")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(dirs::config_dir);
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let base = dirs::config_dir();
     let path = base
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "无法确定配置目录"))?
