@@ -1,22 +1,42 @@
 #!/usr/bin/env python3
-"""Update package manifests from Cargo.toml and the release SHA256SUMS."""
+"""Update package manifests from Cargo.toml and GitHub release digests (or SHA256SUMS)."""
 import argparse
 from datetime import date
+import json
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--checksums', type=Path, required=True, help='Downloaded release SHA256SUMS')
+parser.add_argument(
+    '--checksums',
+    type=Path,
+    required=False,
+    help='Optional local SHA256SUMS file; defaults to reading digests via `gh release view`',
+)
 args = parser.parse_args()
 version = tomllib.loads((ROOT / 'Cargo.toml').read_text())['package']['version']
 hashes = {}
-for line in args.checksums.read_text().splitlines():
-    digest, name = line.split()
-    if not re.fullmatch(r'[a-fA-F0-9]{64}', digest):
-        raise ValueError(f'Invalid SHA256 for {name}')
-    hashes[name.lstrip('*')] = digest.lower()
+if args.checksums:
+    for line in args.checksums.read_text().splitlines():
+        digest, name = line.split()
+        if not re.fullmatch(r'[a-fA-F0-9]{64}', digest):
+            raise ValueError(f'Invalid SHA256 for {name}')
+        hashes[name.lstrip('*')] = digest.lower()
+else:
+    raw = subprocess.check_output(
+        ['gh', 'release', 'view', f'v{version}', '--json', 'assets'],
+        cwd=ROOT,
+        text=True,
+    )
+    for asset in json.loads(raw).get('assets', []):
+        digest = asset.get('digest') or ''
+        if digest.startswith('sha256:'):
+            hex_digest = digest.removeprefix('sha256:').lower()
+            if re.fullmatch(r'[a-f0-9]{64}', hex_digest):
+                hashes[asset['name']] = hex_digest
 base = f'https://github.com/qwerprog/bili-tools/releases/download/v{version}'
 for platform, ext in [('windows', 'zip'), ('darwin', 'zip'), ('linux', 'tar.gz')]:
     for arch in ['amd64', 'arm64']:

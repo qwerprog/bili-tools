@@ -368,7 +368,7 @@ CI 由 GitHub Actions 驱动，推送 `v*` tag 时自动执行多平台交叉编
 1. **Windows** (`windows-latest`)：构建 `x86_64` (x64) 与 `aarch64` (ARM64) 二进制，并分别打包为 `bit-v版本号-windows-amd64.zip` 和 `bit-v版本号-windows-arm64.zip`。
 2. **macOS** (`macos-latest`)：构建 `x86_64` (Intel) 与 `aarch64` (Apple Silicon) 二进制，分别打包为 `bit-v版本号-darwin-amd64.zip` 和 `bit-v版本号-darwin-arm64.zip`。
 3. **Linux** (`ubuntu-latest`)：构建 `x86_64` 与 `aarch64` 二进制，分别打包为 `bit-v版本号-linux-amd64.tar.gz` 和 `bit-v版本号-linux-arm64.tar.gz`。
-4. **统一发布**：六个平台构建成功后，使用 `docs/releases/v版本号.md` 发布说明生成 Release，上传完整 SHA256SUMS。
+4. **统一发布**：六个平台构建成功后，使用 `docs/releases/v版本号.md` 发布说明生成 Release。
 5. **包管理器更新**：运行同步脚本后推送 Homebrew、AUR 清单，并向 `microsoft/winget-pkgs` 提交更新 PR。
 
 Release 构建参数已做极限体积优化，并静态链接 MSVC 运行时，**无需额外安装 VC++ Redistributable**：
@@ -388,11 +388,11 @@ strip = "symbols"
 
 ```bash
 # 1. 修改 Cargo.toml 中的 version
-# 2. 运行同步脚本
-./scripts/sync-version.sh --checksums /path/to/SHA256SUMS
+# 2. 发布完成后直接运行同步脚本（自动通过 gh 读取 Release 中的 SHA256）
+./scripts/sync-version.sh
 ```
 
-该脚本根据发布包的 SHA256SUMS，同步更新 Homebrew、WinGet 和 AUR 二进制包的版本、下载地址和校验和。必须先完成发布包构建。
+该脚本自动读取 GitHub Release 自带的校验和，同步更新 Homebrew、WinGet 和 AUR 二进制包的版本、下载地址和校验和。必须先完成发布包构建。
 
 ## 设计亮点
 
