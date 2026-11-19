@@ -11,6 +11,7 @@ pub const MIXIN_KEY_ENC_TAB: [usize; 64] = [
 ];
 
 struct CachedKeys {
+    base_url: String,
     img_key: String,
     sub_key: String,
     fetched_at: Instant,
@@ -103,16 +104,20 @@ pub fn encode_wbi(params: &[(&str, &str)], img_key: &str, sub_key: &str) -> Stri
     encode_wbi_with_timestamp(params, img_key, sub_key, now)
 }
 
-/// 从 Bilibili 导航接口获取最新的 img_key 和 sub_key（带内存缓存 1 小时）
+/// 从 Bilibili 导航接口获取最新的 img_key 和 sub_key（带内存缓存 1 小时，按 base_url 隔离）
 pub fn get_wbi_keys(sessdata: Option<&str>) -> Result<(String, String)> {
+    let base_url = crate::api::client::api_base_url();
+
     if let Ok(guard) = WBI_CACHE.lock()
         && let Some(ref cached) = *guard
+        && cached.base_url == base_url
         && cached.fetched_at.elapsed() < Duration::from_secs(3600)
     {
         return Ok((cached.img_key.clone(), cached.sub_key.clone()));
     }
 
-    let mut req = crate::api::client::get("https://api.bilibili.com/x/web-interface/nav")
+    let url = format!("{base_url}/x/web-interface/nav");
+    let mut req = crate::api::client::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Referer", "https://www.bilibili.com/");
 
@@ -123,8 +128,8 @@ pub fn get_wbi_keys(sessdata: Option<&str>) -> Result<(String, String)> {
     }
 
     let resp = req.send()?;
-    let text = resp.as_str()?;
-    let json: serde_json::Value = serde_json::from_str(text)?;
+    let json: serde_json::Value =
+        crate::api::client::parse_json_response(&resp, "获取 WBI 密钥失败")?;
 
     let img_url = json["data"]["wbi_img"]["img_url"]
         .as_str()
@@ -140,6 +145,7 @@ pub fn get_wbi_keys(sessdata: Option<&str>) -> Result<(String, String)> {
 
     if let Ok(mut guard) = WBI_CACHE.lock() {
         *guard = Some(CachedKeys {
+            base_url,
             img_key: img_key.clone(),
             sub_key: sub_key.clone(),
             fetched_at: Instant::now(),
@@ -243,5 +249,68 @@ mod tests {
             query,
             "bar=514&foo=114&wts=1702204169&zab=1919810&w_rid=8f6f2b5b3d485fe1886cec6a0be8c5d4"
         );
+    }
+
+    #[test]
+    fn test_wbi_cache_isolated_by_api_base_url() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::TcpListener;
+
+        let _lock = crate::api::client::TEST_ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
+        struct RestoreApiEnv(Option<String>);
+        impl Drop for RestoreApiEnv {
+            fn drop(&mut self) {
+                unsafe {
+                    match &self.0 {
+                        Some(v) => std::env::set_var("BT_API_BASE_URL", v),
+                        None => std::env::remove_var("BT_API_BASE_URL"),
+                    }
+                }
+            }
+        }
+        let _restore = RestoreApiEnv(std::env::var("BT_API_BASE_URL").ok());
+
+        fn spawn_nav_server(img_name: &str, sub_name: &str) -> (String, std::thread::JoinHandle<()>) {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let base = format!("http://{}", listener.local_addr().unwrap());
+            let img = img_name.to_string();
+            let sub = sub_name.to_string();
+            let handle = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                        break;
+                    }
+                }
+                let body = format!(
+                    r#"{{"code":0,"data":{{"wbi_img":{{"img_url":"https://i0.hdslb.com/bfs/wbi/{img}.png","sub_url":"https://i0.hdslb.com/bfs/wbi/{sub}.png"}}}}}}"#
+                );
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                )
+                .unwrap();
+            });
+            (base, handle)
+        }
+
+        let (base1, h1) = spawn_nav_server("img_server_one", "sub_server_one");
+        unsafe { std::env::set_var("BT_API_BASE_URL", &base1) };
+        let k1 = get_wbi_keys(None).unwrap();
+        h1.join().unwrap();
+        assert_eq!(k1, ("img_server_one".to_string(), "sub_server_one".to_string()));
+
+        let (base2, h2) = spawn_nav_server("img_server_two", "sub_server_two");
+        unsafe { std::env::set_var("BT_API_BASE_URL", &base2) };
+        let k2 = get_wbi_keys(None).unwrap();
+        h2.join().unwrap();
+        assert_eq!(k2, ("img_server_two".to_string(), "sub_server_two".to_string()));
     }
 }

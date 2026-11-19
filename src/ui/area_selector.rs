@@ -1,6 +1,7 @@
 use crate::api::area::fetch_area_list;
 use crate::error::{BiliLiveError, Result};
-use dialoguer::{Select, theme::ColorfulTheme};
+use crate::ui::theme::bili_dialoguer_theme;
+use dialoguer::Select;
 
 // 交互式分区选择器：两级 dialoguer::Select 菜单
 pub fn get_area_choice() -> Result<u32> {
@@ -32,7 +33,7 @@ pub fn get_area_choice() -> Result<u32> {
 
     // 一级菜单：选择分区大类
     let parent_names: Vec<&str> = areas.iter().map(|(n, _)| *n).collect();
-    let parent_idx = Select::with_theme(&ColorfulTheme::default())
+    let parent_idx = Select::with_theme(&bili_dialoguer_theme())
         .with_prompt("选择分区")
         .default(0)
         .items(&parent_names)
@@ -52,7 +53,7 @@ pub fn get_area_choice() -> Result<u32> {
         .iter()
         .map(|(n, id)| format!("{} - {}", n, id))
         .collect();
-    let sub_idx = Select::with_theme(&ColorfulTheme::default())
+    let sub_idx = Select::with_theme(&bili_dialoguer_theme())
         .with_prompt(format!("选择子分区 - {}", parent_names[parent_idx]))
         .default(0)
         .items(&sub_items)

@@ -1,9 +1,21 @@
-use env_logger::{Builder, Target};
+use env_logger::{Builder, Env, Target};
 use log::LevelFilter;
 use std::io::Write;
 
-pub fn init_logger() {
-    let mut builder = Builder::new();
+pub fn init_logger(verbose: u8, quiet: bool) {
+    let has_rust_log = std::env::var_os("RUST_LOG").is_some_and(|v| !v.is_empty());
+    let default_level = if quiet && !has_rust_log {
+        "off"
+    } else {
+        match verbose {
+            0 => "warn",
+            1 => "info",
+            2 => "debug",
+            _ => "trace",
+        }
+    };
+
+    let mut builder = Builder::from_env(Env::default().default_filter_or(default_level));
 
     builder.format(|buf, record| {
         let level_emoji = match record.level() {
@@ -17,9 +29,11 @@ pub fn init_logger() {
         writeln!(buf, "{} {}", level_emoji, record.args())
     });
 
-    builder.filter(None, LevelFilter::Warn);
+    if quiet && !has_rust_log {
+        builder.filter_level(LevelFilter::Off);
+    }
 
-    builder.target(Target::Stdout);
+    builder.target(Target::Stderr);
 
-    builder.init();
+    let _ = builder.try_init();
 }

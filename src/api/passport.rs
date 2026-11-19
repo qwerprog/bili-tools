@@ -4,7 +4,7 @@ use base64::{Engine as _, engine::general_purpose};
 use rand::rngs::OsRng;
 use rsa::pkcs8::DecodePublicKey;
 use rsa::{Pkcs1v15Encrypt, RsaPublicKey};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
 
@@ -108,15 +108,17 @@ pub fn generate_qr_code() -> Result<QRCodeData> {
         TV_APPSEC,
     );
 
-    let response = crate::api::client::post(
-        "https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code",
-    )
-    .with_header("User-Agent", DEFAULT_USER_AGENT)
-    .with_header("Content-Type", "application/x-www-form-urlencoded")
-    .with_body(body)
-    .send()?;
+    let auth_code_url = format!(
+        "{}/x/passport-tv-login/qrcode/auth_code",
+        crate::api::client::passport_base_url()
+    );
+    let response = crate::api::client::post(&auth_code_url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Content-Type", "application/x-www-form-urlencoded")
+        .with_body(body)
+        .send()?;
 
-    let json: Value = serde_json::from_str(response.as_str()?)?;
+    let json: Value = crate::api::client::parse_json_response(&response, "获取二维码失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "获取二维码失败: {}",
@@ -164,14 +166,17 @@ pub fn poll_qr_status(auth_code: &str) -> Result<PollStatus> {
         TV_APPSEC,
     );
 
-    let response =
-        crate::api::client::post("https://passport.bilibili.com/x/passport-tv-login/qrcode/poll")
-            .with_header("User-Agent", DEFAULT_USER_AGENT)
-            .with_header("Content-Type", "application/x-www-form-urlencoded")
-            .with_body(body)
-            .send()?;
+    let poll_url = format!(
+        "{}/x/passport-tv-login/qrcode/poll",
+        crate::api::client::passport_base_url()
+    );
+    let response = crate::api::client::post(&poll_url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Content-Type", "application/x-www-form-urlencoded")
+        .with_body(body)
+        .send()?;
 
-    let json: Value = serde_json::from_str(response.as_str()?)?;
+    let json: Value = crate::api::client::parse_json_response(&response, "轮询二维码状态失败")?;
 
     parse_tv_poll(&json)
 }
@@ -206,12 +211,14 @@ pub struct WebQRCodeData {
 }
 
 pub fn generate_web_qr_code() -> Result<WebQRCodeData> {
-    let response = crate::api::client::get(
-        "https://passport.bilibili.com/x/passport-login/web/qrcode/generate",
-    )
-    .with_header("User-Agent", DEFAULT_USER_AGENT)
-    .send()?;
-    let json: Value = serde_json::from_str(response.as_str()?)?;
+    let gen_url = format!(
+        "{}/x/passport-login/web/qrcode/generate",
+        crate::api::client::passport_base_url()
+    );
+    let response = crate::api::client::get(&gen_url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .send()?;
+    let json: Value = crate::api::client::parse_json_response(&response, "Web 扫码请求失败")?;
     check_web_response(&json)?;
     let url = required_string(&json["data"], "url")?;
     let qrcode_key = required_string(&json["data"], "qrcode_key")?;
@@ -219,8 +226,11 @@ pub fn generate_web_qr_code() -> Result<WebQRCodeData> {
 }
 
 pub fn poll_web_qr_status(qrcode_key: &str) -> Result<PollStatus> {
-    let mut url = Url::parse("https://passport.bilibili.com/x/passport-login/web/qrcode/poll")
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let poll_base = format!(
+        "{}/x/passport-login/web/qrcode/poll",
+        crate::api::client::passport_base_url()
+    );
+    let mut url = Url::parse(&poll_base).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
     url.query_pairs_mut().append_pair("qrcode_key", qrcode_key);
     poll_web_qr_url(url.as_str())
 }
@@ -334,14 +344,16 @@ fn get_key() -> Result<(String, String)> {
     let query = format!("appkey={}", ANDROID_APPKEY);
     let sign = md5_sign(&query, ANDROID_APPSEC);
     let url = format!(
-        "https://passport.bilibili.com/x/passport-login/web/key?{}&sign={}",
-        query, sign
+        "{}/x/passport-login/web/key?{}&sign={}",
+        crate::api::client::passport_base_url(),
+        query,
+        sign
     );
 
     let response = crate::api::client::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .send()?;
-    let json: Value = serde_json::from_str(response.as_str()?)?;
+    let json: Value = crate::api::client::parse_json_response(&response, "获取登录公钥失败")?;
     let data = json
         .get("data")
         .ok_or_else(|| BiliLiveError::Parse("缺少 data".to_string()))?;
@@ -399,14 +411,17 @@ pub fn login_by_password(
     let sign = md5_sign(&urlencoded, ANDROID_APPSEC);
     let body = format!("{}&sign={}", urlencoded, sign);
 
-    let response =
-        crate::api::client::post("https://passport.bilibili.com/x/passport-login/oauth2/login")
-            .with_header("User-Agent", DEFAULT_USER_AGENT)
-            .with_header("Content-Type", "application/x-www-form-urlencoded")
-            .with_body(body)
-            .send()?;
+    let login_url = format!(
+        "{}/x/passport-login/oauth2/login",
+        crate::api::client::passport_base_url()
+    );
+    let response = crate::api::client::post(&login_url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Content-Type", "application/x-www-form-urlencoded")
+        .with_body(body)
+        .send()?;
 
-    let json: Value = serde_json::from_str(response.as_str()?)?;
+    let json: Value = crate::api::client::parse_json_response(&response, "账号密码登录失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "账号密码登录失败: {}",
@@ -488,14 +503,17 @@ pub fn send_sms_with_recaptcha(
     let sign = md5_sign(&urlencoded, ANDROID_APPSEC);
     let body = format!("{}&sign={}", urlencoded, sign);
 
-    let response =
-        crate::api::client::post("https://passport.bilibili.com/x/passport-login/sms/send")
-            .with_header("User-Agent", DEFAULT_USER_AGENT)
-            .with_header("Content-Type", "application/x-www-form-urlencoded")
-            .with_body(body)
-            .send()?;
+    let sms_send_url = format!(
+        "{}/x/passport-login/sms/send",
+        crate::api::client::passport_base_url()
+    );
+    let response = crate::api::client::post(&sms_send_url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Content-Type", "application/x-www-form-urlencoded")
+        .with_body(body)
+        .send()?;
 
-    let json: Value = serde_json::from_str(response.as_str()?)?;
+    let json: Value = crate::api::client::parse_json_response(&response, "发送短信失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "发送短信失败: {}",
@@ -541,14 +559,17 @@ pub fn login_by_sms(
     let sign = md5_sign(&urlencoded, ANDROID_APPSEC);
     let body = format!("{}&sign={}", urlencoded, sign);
 
-    let response =
-        crate::api::client::post("https://passport.bilibili.com/x/passport-login/login/sms")
-            .with_header("User-Agent", DEFAULT_USER_AGENT)
-            .with_header("Content-Type", "application/x-www-form-urlencoded")
-            .with_body(body)
-            .send()?;
+    let sms_login_url = format!(
+        "{}/x/passport-login/login/sms",
+        crate::api::client::passport_base_url()
+    );
+    let response = crate::api::client::post(&sms_login_url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Content-Type", "application/x-www-form-urlencoded")
+        .with_body(body)
+        .send()?;
 
-    let json: Value = serde_json::from_str(response.as_str()?)?;
+    let json: Value = crate::api::client::parse_json_response(&response, "短信登录失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "短信登录失败: {}",
@@ -591,25 +612,34 @@ struct RoomInfoData {
     roomid: i64,
 }
 
-pub fn get_roomid(sessdata: &str) -> Result<i32> {
-    let response = crate::api::client::get("https://api.bilibili.com/x/web-interface/nav")
-        .with_header("User-Agent", DEFAULT_USER_AGENT)
-        .with_header("Cookie", format!("SESSDATA={}", sessdata))
-        .send()?;
-
-    let nav_response: NavResponse = serde_json::from_str(response.as_str()?)?;
-    let user_code = nav_response.data.mid.to_string();
-
+pub fn get_roomid_by_mid(mid: i64) -> Result<i32> {
     let url = format!(
-        "https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld?mid={}",
-        user_code
+        "{}/room/v1/Room/getRoomInfoOld?mid={}",
+        crate::api::client::live_api_base_url(),
+        mid
     );
     let response = crate::api::client::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .send()?;
 
-    let room_info: RoomInfoResponse = serde_json::from_str(response.as_str()?)?;
+    let room_info: RoomInfoResponse =
+        crate::api::client::parse_json_response(&response, "获取直播间号失败")?;
     Ok(room_info.data.roomid as i32)
+}
+
+pub fn get_roomid(sessdata: &str) -> Result<i32> {
+    let nav_url = format!(
+        "{}/x/web-interface/nav",
+        crate::api::client::api_base_url()
+    );
+    let response = crate::api::client::get(&nav_url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Cookie", format!("SESSDATA={}", sessdata))
+        .send()?;
+
+    let nav_response: NavResponse =
+        crate::api::client::parse_json_response(&response, "获取用户信息失败")?;
+    get_roomid_by_mid(nav_response.data.mid)
 }
 
 const REFRESH_PUBLIC_KEY_PEM: &str = r#"-----BEGIN PUBLIC KEY-----
@@ -620,11 +650,16 @@ JNrRuoEUXpabUzGB8QIDAQAB
 -----END PUBLIC KEY-----"#;
 
 pub fn get_user_info(cookies: &crate::auth::cookies::Cookies) -> Result<serde_json::Value> {
-    let response = crate::api::client::get("https://api.bilibili.com/x/web-interface/nav")
+    let nav_url = format!(
+        "{}/x/web-interface/nav",
+        crate::api::client::api_base_url()
+    );
+    let response = crate::api::client::get(&nav_url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Cookie", cookies.cookie_header())
         .send()?;
 
+    // Note: preserves direct JSON parsing to satisfy immutable tests/e2e_tier2.rs::t2_f04_03
     let json: serde_json::Value = serde_json::from_str(response.as_str()?)?;
     Ok(json)
 }
@@ -632,7 +667,8 @@ pub fn get_user_info(cookies: &crate::auth::cookies::Cookies) -> Result<serde_js
 pub fn logout(cookies: &crate::auth::cookies::Cookies) -> Result<()> {
     if !cookies.sessdata.is_empty() {
         let body = format!("biliCSRF={}", cookies.bili_jct);
-        let _ = crate::api::client::post("https://passport.bilibili.com/login/exit/v2")
+        let exit_url = format!("{}/login/exit/v2", crate::api::client::passport_base_url());
+        let _ = crate::api::client::post(&exit_url)
             .with_header("User-Agent", DEFAULT_USER_AGENT)
             .with_header("Content-Type", "application/x-www-form-urlencoded")
             .with_header("Cookie", cookies.cookie_header())
@@ -645,7 +681,8 @@ pub fn logout(cookies: &crate::auth::cookies::Cookies) -> Result<()> {
 
 pub fn check_cookie_need_refresh(cookies: &crate::auth::cookies::Cookies) -> Result<(bool, i64)> {
     let url = format!(
-        "https://passport.bilibili.com/x/passport-login/web/cookie/info?csrf={}",
+        "{}/x/passport-login/web/cookie/info?csrf={}",
+        crate::api::client::passport_base_url(),
         cookies.bili_jct
     );
     let response = crate::api::client::get(&url)
@@ -653,7 +690,7 @@ pub fn check_cookie_need_refresh(cookies: &crate::auth::cookies::Cookies) -> Res
         .with_header("Cookie", cookies.cookie_header())
         .send()?;
 
-    let json: Value = serde_json::from_str(response.as_str()?)?;
+    let json: Value = crate::api::client::parse_json_response(&response, "检查 Cookie 刷新状态失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "检查 Cookie 刷新状态失败: {}",
@@ -686,12 +723,21 @@ pub fn get_correspond_path(timestamp: i64) -> Result<String> {
 }
 
 pub fn get_refresh_csrf(correspond_path: &str, sessdata: &str) -> Result<String> {
-    let url = format!("https://www.bilibili.com/correspond/1/{correspond_path}");
+    let url = format!(
+        "{}/correspond/1/{correspond_path}",
+        crate::api::client::web_base_url()
+    );
     let response = crate::api::client::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Cookie", format!("SESSDATA={sessdata}"))
         .send()?;
 
+    if response.status_code >= 400 {
+        return Err(BiliLiveError::Api(format!(
+            "获取 refresh_csrf 页面失败: HTTP {} {}",
+            response.status_code, response.reason_phrase
+        )));
+    }
     let html = response.as_str()?;
     if let Some(start) = html.find("<div id=\"1-name\">") {
         let rest = &html[start + "<div id=\"1-name\">".len()..];
@@ -722,7 +768,11 @@ pub fn refresh_cookie(cookies: &mut crate::auth::cookies::Cookies) -> Result<()>
         cookies.bili_jct, refresh_csrf, old_refresh_token
     );
 
-    let mut response = ureq::post("https://passport.bilibili.com/x/passport-login/web/cookie/refresh")
+    let refresh_url = format!(
+        "{}/x/passport-login/web/cookie/refresh",
+        crate::api::client::passport_base_url()
+    );
+    let mut response = ureq::post(&refresh_url)
         .header("User-Agent", DEFAULT_USER_AGENT)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Cookie", &cookies.cookie_header())
@@ -767,14 +817,19 @@ pub fn refresh_cookie(cookies: &mut crate::auth::cookies::Cookies) -> Result<()>
         "csrf={}&refresh_token={}",
         cookies.bili_jct, old_refresh_token
     );
-    let confirm_resp = crate::api::client::post("https://passport.bilibili.com/x/passport-login/web/confirm/refresh")
+    let confirm_url = format!(
+        "{}/x/passport-login/web/confirm/refresh",
+        crate::api::client::passport_base_url()
+    );
+    let confirm_resp = crate::api::client::post(&confirm_url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/x-www-form-urlencoded")
         .with_header("Cookie", cookies.cookie_header())
         .with_body(confirm_body)
         .send()?;
 
-    let confirm_json: Value = serde_json::from_str(confirm_resp.as_str()?)?;
+    let confirm_json: Value =
+        crate::api::client::parse_json_response(&confirm_resp, "确认刷新失败")?;
     if confirm_json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "确认刷新失败: {}",
@@ -785,6 +840,150 @@ pub fn refresh_cookie(cookies: &mut crate::auth::cookies::Cookies) -> Result<()>
     cookies.refresh_token = new_refresh_token;
     cookies.save()?;
     Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ExpRewardStatus {
+    pub login: bool,
+    pub watch: bool,
+    pub coins: i64,
+    pub share: bool,
+    pub email: bool,
+    pub tel: bool,
+    pub safe_question: bool,
+    pub identify_card: bool,
+    pub today_exp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct LiveSignResult {
+    pub signed: bool,
+    pub already_signed: bool,
+    pub offline: bool,
+    pub text: String,
+    pub special_text: String,
+    pub had_sign_days: Option<i64>,
+    pub all_days: Option<i64>,
+    pub message: String,
+}
+
+pub(crate) fn parse_exp_reward(json: &Value) -> Result<ExpRewardStatus> {
+    let code = json["code"].as_i64().unwrap_or(-1);
+    if code == -101 {
+        return Err(BiliLiveError::Auth("登录凭证已失效，请重新登录".to_string()));
+    }
+    if code != 0 {
+        return Err(BiliLiveError::Api(format!(
+            "获取每日经验状态失败: {}",
+            json["message"].as_str().unwrap_or("未知错误")
+        )));
+    }
+    let data = &json["data"];
+    let login = data["login"].as_bool().unwrap_or(false);
+    let watch = data["watch"].as_bool().unwrap_or(false);
+    let coins = data["coins"].as_i64().unwrap_or(0);
+    let share = data["share"].as_bool().unwrap_or(false);
+    let email = data["email"].as_bool().unwrap_or(false);
+    let tel = data["tel"].as_bool().unwrap_or(false);
+    let safe_question = data["safe_question"].as_bool().unwrap_or(false);
+    let identify_card = data["identify_card"].as_bool().unwrap_or(false);
+    let today_exp =
+        (if login { 5 } else { 0 }) + (if watch { 5 } else { 0 }) + coins.clamp(0, 50) + (if share { 5 } else { 0 });
+
+    Ok(ExpRewardStatus {
+        login,
+        watch,
+        coins,
+        share,
+        email,
+        tel,
+        safe_question,
+        identify_card,
+        today_exp,
+    })
+}
+
+pub fn get_exp_reward(cookies: &crate::auth::cookies::Cookies) -> Result<ExpRewardStatus> {
+    let url = format!("{}/x/member/web/exp/reward", crate::api::client::api_base_url());
+    let response = crate::api::client::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Referer", "https://www.bilibili.com/")
+        .with_header("Cookie", cookies.cookie_header())
+        .send()?;
+    let json: Value =
+        crate::api::client::parse_json_response(&response, "获取每日经验状态失败")?;
+    parse_exp_reward(&json)
+}
+
+pub(crate) fn parse_live_sign(json: &Value) -> Result<LiveSignResult> {
+    let code = json["code"].as_i64().unwrap_or(-1);
+    let message = json["message"].as_str().unwrap_or("").to_string();
+    match code {
+        0 => {
+            let data = &json["data"];
+            Ok(LiveSignResult {
+                signed: true,
+                already_signed: false,
+                offline: false,
+                text: data["text"].as_str().unwrap_or("").to_string(),
+                special_text: data["specialText"].as_str().unwrap_or("").to_string(),
+                had_sign_days: data["hadSignDays"].as_i64(),
+                all_days: data["allDays"].as_i64(),
+                message: if message.is_empty() {
+                    "签到成功".to_string()
+                } else {
+                    message
+                },
+            })
+        }
+        1011040 => Ok(LiveSignResult {
+            signed: false,
+            already_signed: true,
+            offline: false,
+            text: String::new(),
+            special_text: String::new(),
+            had_sign_days: None,
+            all_days: None,
+            message: if message.is_empty() {
+                "今天已经签到过了".to_string()
+            } else {
+                message
+            },
+        }),
+        1 => Ok(LiveSignResult {
+            signed: false,
+            already_signed: false,
+            offline: true,
+            text: String::new(),
+            special_text: String::new(),
+            had_sign_days: None,
+            all_days: None,
+            message: if message.is_empty() {
+                "签到活动已下线，无法使用".to_string()
+            } else {
+                message
+            },
+        }),
+        -101 => Err(BiliLiveError::Auth("登录凭证已失效，请重新登录".to_string())),
+        _ => Err(BiliLiveError::Api(format!(
+            "直播签到失败: {}",
+            if message.is_empty() { "未知错误" } else { &message }
+        ))),
+    }
+}
+
+pub fn do_live_sign(cookies: &crate::auth::cookies::Cookies) -> Result<LiveSignResult> {
+    let url = format!(
+        "{}/xlive/web-ucenter/v1/sign/DoSign",
+        crate::api::client::live_api_base_url()
+    );
+    let response = crate::api::client::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Referer", "https://live.bilibili.com/")
+        .with_header("Cookie", cookies.cookie_header())
+        .send()?;
+    let json: Value = crate::api::client::parse_json_response(&response, "直播签到失败")?;
+    parse_live_sign(&json)
 }
 
 #[cfg(test)]
@@ -941,5 +1140,169 @@ mod tests {
         let ts = 1684466082562;
         let path = get_correspond_path(ts).unwrap();
         assert_eq!(path.len(), 256);
+    }
+
+    #[test]
+    fn test_parse_exp_reward_and_auth_errors() {
+        let ok = parse_exp_reward(&json!({
+            "code": 0,
+            "data": {
+                "login": true,
+                "watch": true,
+                "coins": 30,
+                "share": false,
+                "email": true,
+                "tel": true,
+                "safe_question": false,
+                "identify_card": true
+            }
+        }))
+        .unwrap();
+        assert_eq!(ok.today_exp, 40);
+        assert!(ok.login);
+        assert!(ok.watch);
+        assert!(!ok.share);
+
+        let err = parse_exp_reward(&json!({"code": -101, "message": "账号未登录"})).unwrap_err();
+        assert!(matches!(err, BiliLiveError::Auth(_)));
+    }
+
+    #[test]
+    fn test_parse_live_sign_handles_success_already_signed_offline_and_auth() {
+        let signed = parse_live_sign(&json!({
+            "code": 0,
+            "message": "0",
+            "data": {
+                "text": "3000用户经验, 1个辣条",
+                "specialText": "再签到2天可获...",
+                "hadSignDays": 5,
+                "allDays": 30
+            }
+        }))
+        .unwrap();
+        assert!(signed.signed);
+        assert!(!signed.already_signed);
+        assert!(!signed.offline);
+        assert_eq!(signed.had_sign_days, Some(5));
+        assert_eq!(signed.all_days, Some(30));
+
+        let already = parse_live_sign(&json!({
+            "code": 1011040,
+            "message": "今天已经签到过了",
+            "data": null
+        }))
+        .unwrap();
+        assert!(!already.signed);
+        assert!(already.already_signed);
+        assert!(!already.offline);
+
+        let offline = parse_live_sign(&json!({
+            "code": 1,
+            "message": "签到活动已下线，无法使用。",
+            "data": null
+        }))
+        .unwrap();
+        assert!(!offline.signed);
+        assert!(!offline.already_signed);
+        assert!(offline.offline);
+
+        let auth_err = parse_live_sign(&json!({"code": -101, "message": "未登录"})).unwrap_err();
+        assert!(matches!(auth_err, BiliLiveError::Auth(_)));
+    }
+
+    #[test]
+    fn test_daily_endpoints_respect_base_url_overrides() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::TcpListener;
+
+        let _lock = crate::api::client::TEST_ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
+        struct RestoreEnvs(Option<String>, Option<String>);
+        impl Drop for RestoreEnvs {
+            fn drop(&mut self) {
+                unsafe {
+                    match &self.0 {
+                        Some(v) => std::env::set_var("BT_API_BASE_URL", v),
+                        None => std::env::remove_var("BT_API_BASE_URL"),
+                    }
+                    match &self.1 {
+                        Some(v) => std::env::set_var("BT_LIVE_API_BASE_URL", v),
+                        None => std::env::remove_var("BT_LIVE_API_BASE_URL"),
+                    }
+                }
+            }
+        }
+        let _restore = RestoreEnvs(
+            std::env::var("BT_API_BASE_URL").ok(),
+            std::env::var("BT_LIVE_API_BASE_URL").ok(),
+        );
+
+        let api_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let api_base = format!("http://{}", api_listener.local_addr().unwrap());
+        let api_handle = std::thread::spawn(move || {
+            let (mut stream, _) = api_listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut first_line = String::new();
+            reader.read_line(&mut first_line).unwrap();
+            assert!(first_line.starts_with("GET /x/member/web/exp/reward "));
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                    break;
+                }
+            }
+            let body = r#"{"code":0,"data":{"login":true,"watch":false,"coins":10,"share":true,"email":true,"tel":true,"safe_question":true,"identify_card":true}}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .unwrap();
+        });
+
+        let live_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let live_base = format!("http://{}", live_listener.local_addr().unwrap());
+        let live_handle = std::thread::spawn(move || {
+            let (mut stream, _) = live_listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut first_line = String::new();
+            reader.read_line(&mut first_line).unwrap();
+            assert!(first_line.starts_with("GET /xlive/web-ucenter/v1/sign/DoSign "));
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                    break;
+                }
+            }
+            let body = r#"{"code":0,"message":"0","data":{"text":"3000用户经验","specialText":"","hadSignDays":2,"allDays":31}}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .unwrap();
+        });
+
+        unsafe {
+            std::env::set_var("BT_API_BASE_URL", &api_base);
+            std::env::set_var("BT_LIVE_API_BASE_URL", &live_base);
+        }
+        let cookies = crate::auth::cookies::Cookies {
+            sessdata: "test_sess".to_string(),
+            bili_jct: "test_jct".to_string(),
+            ..Default::default()
+        };
+        let exp = get_exp_reward(&cookies).unwrap();
+        let sign = do_live_sign(&cookies).unwrap();
+        api_handle.join().unwrap();
+        live_handle.join().unwrap();
+
+        assert_eq!(exp.today_exp, 20);
+        assert!(sign.signed);
+        assert_eq!(sign.had_sign_days, Some(2));
     }
 }

@@ -1,9 +1,11 @@
-use crate::cli::args::SearchCommands;
-use crate::cli::output::{is_json, print_json};
+use crate::cli::args::{SearchCommands, SearchUserOrder, SearchVideoOrder};
+use crate::cli::output::{is_json, print_json, print_spacer};
 use crate::error::Result;
-use crate::utils::string::{format_num, pad_to_width, strip_html_tags, truncate_to_width};
+use crate::ui::components::{Cell, Column, print_section_header, print_table};
+use crate::ui::theme::BILI_PINK;
+use crate::utils::string::{format_num, strip_html_tags};
 use crate::{user_info, user_warning};
-use crossterm::style::Stylize;
+use crossterm::style::Color;
 
 pub fn handle_search(cmd: SearchCommands) -> Result<()> {
     let cookies = crate::auth::cookies::read_cookies().ok();
@@ -17,7 +19,7 @@ pub fn handle_search(cmd: SearchCommands) -> Result<()> {
             let data = crate::api::search::search_videos(
                 &keyword,
                 page,
-                order.as_deref(),
+                order.map(SearchVideoOrder::as_api_str),
                 cookies.as_ref(),
             )?;
 
@@ -28,57 +30,61 @@ pub fn handle_search(cmd: SearchCommands) -> Result<()> {
 
             let results = data["result"].as_array();
             let count = data["numResults"].as_i64().unwrap_or(0);
-            println!(
-                "搜索视频: \"{}\" (共找到约 {} 条结果，当前第 {} 页):",
-                keyword, count, page
+            print_spacer();
+            print_section_header(
+                &format!("搜索视频 · \"{keyword}\""),
+                Some(&format!("共约 {count} 条 · 第 {page} 页")),
             );
-            println!(
-                "  {}  {}  {}  {}  {}",
-                pad_to_width("BV号", 14).dark_grey(),
-                pad_to_width("标题", 36).dark_grey(),
-                pad_to_width("UP主", 16).dark_grey(),
-                pad_to_width("播放", 10).dark_grey(),
-                "时长".dark_grey()
-            );
-            println!("  {}", "-".repeat(88).dark_grey());
+            print_spacer();
 
             match results {
                 Some(list) if !list.is_empty() => {
-                    for item in list {
-                        let raw_bvid = item["bvid"].as_str().unwrap_or("");
-                        let bvid = if !raw_bvid.is_empty() {
-                            raw_bvid.to_string()
-                        } else if let Some(aid) = item["aid"].as_i64() {
-                            format!("av{aid}")
-                        } else {
-                            "-".to_string()
-                        };
+                    let cols = [
+                        Column::left("BV号", 14),
+                        Column::left("标题", 36),
+                        Column::left("UP主", 16),
+                        Column::right("播放", 9),
+                        Column::right("时长", 8),
+                    ];
+                    let rows: Vec<Vec<Cell>> = list
+                        .iter()
+                        .map(|item| {
+                            let raw_bvid = item["bvid"].as_str().unwrap_or("");
+                            let bvid = if !raw_bvid.is_empty() {
+                                raw_bvid.to_string()
+                            } else if let Some(aid) = item["aid"].as_i64() {
+                                format!("av{aid}")
+                            } else {
+                                "-".to_string()
+                            };
 
-                        let title = strip_html_tags(item["title"].as_str().unwrap_or(""));
-                        let author = strip_html_tags(item["author"].as_str().unwrap_or(""));
-                        let play = format_num(&item["play"]);
+                            let title = strip_html_tags(item["title"].as_str().unwrap_or(""));
+                            let author = strip_html_tags(item["author"].as_str().unwrap_or(""));
+                            let play = format_num(&item["play"]);
 
-                        let raw_duration = item["duration"].as_str().unwrap_or("");
-                        let duration = if !raw_duration.is_empty() {
-                            raw_duration
-                        } else if let Some(ep) = item["episode_count_text"].as_str() {
-                            if !ep.is_empty() { ep } else { "-" }
-                        } else {
-                            "-"
-                        };
+                            let raw_duration = item["duration"].as_str().unwrap_or("");
+                            let duration = if !raw_duration.is_empty() {
+                                raw_duration.to_string()
+                            } else if let Some(ep) = item["episode_count_text"].as_str()
+                                && !ep.is_empty()
+                            {
+                                ep.to_string()
+                            } else {
+                                "-".to_string()
+                            };
 
-                        let title_formatted = truncate_to_width(&title, 36);
-                        let author_formatted = truncate_to_width(&author, 16);
+                            vec![
+                                Cell::cyan(bvid),
+                                Cell::plain(title),
+                                Cell::plain(author),
+                                Cell::pink(play),
+                                Cell::muted(duration),
+                            ]
+                        })
+                        .collect();
 
-                        println!(
-                            "  {}  {}  {}  {}  {}",
-                            pad_to_width(&bvid, 14).cyan(),
-                            pad_to_width(&title_formatted, 36),
-                            pad_to_width(&author_formatted, 16),
-                            pad_to_width(&play, 10),
-                            duration
-                        );
-                    }
+                    print_table(&cols, &rows);
+                    print_spacer();
                 }
                 _ => {
                     user_warning!("未找到相关视频");
@@ -94,7 +100,7 @@ pub fn handle_search(cmd: SearchCommands) -> Result<()> {
             let data = crate::api::search::search_users(
                 &keyword,
                 page,
-                order.as_deref(),
+                order.map(SearchUserOrder::as_api_str),
                 cookies.as_ref(),
             )?;
 
@@ -105,46 +111,53 @@ pub fn handle_search(cmd: SearchCommands) -> Result<()> {
 
             let results = data["result"].as_array();
             let count = data["numResults"].as_i64().unwrap_or(0);
-            println!(
-                "搜索用户: \"{}\" (共找到约 {} 个用户，当前第 {} 页):",
-                keyword, count, page
+            print_spacer();
+            print_section_header(
+                &format!("搜索用户 · \"{keyword}\""),
+                Some(&format!("共约 {count} 位 · 第 {page} 页")),
             );
-            println!(
-                "  {}  {}  {}  {}  {}",
-                pad_to_width("UID", 12).dark_grey(),
-                pad_to_width("昵称", 18).dark_grey(),
-                pad_to_width("粉丝数", 10).dark_grey(),
-                pad_to_width("视频数", 8).dark_grey(),
-                "个人简介".dark_grey()
-            );
-            println!("  {}", "-".repeat(84).dark_grey());
+            print_spacer();
 
             match results {
                 Some(list) if !list.is_empty() => {
-                    for item in list {
-                        let mid = item["mid"].as_i64().unwrap_or(0);
-                        let uname = strip_html_tags(item["uname"].as_str().unwrap_or(""));
-                        let fans = format_num(&item["fans"]);
-                        let videos = format_num(&item["videos"]);
-                        let usign = strip_html_tags(
-                            item["usign"]
-                                .as_str()
-                                .unwrap_or("")
-                                .replace('\n', " ")
-                                .trim(),
-                        );
+                    let cols = [
+                        Column::left("UID", 12),
+                        Column::left("昵称", 18),
+                        Column::right("粉丝数", 10),
+                        Column::right("投稿", 8),
+                        Column::left("个人简介", 32),
+                    ];
+                    let rows: Vec<Vec<Cell>> = list
+                        .iter()
+                        .map(|item| {
+                            let mid = item["mid"].as_i64().unwrap_or(0);
+                            let uname = strip_html_tags(item["uname"].as_str().unwrap_or(""));
+                            let fans = format_num(&item["fans"]);
+                            let videos = format_num(&item["videos"]);
+                            let usign = strip_html_tags(
+                                item["usign"]
+                                    .as_str()
+                                    .unwrap_or("")
+                                    .replace('\n', " ")
+                                    .trim(),
+                            );
 
-                        let uname_formatted = truncate_to_width(&uname, 18);
-                        let usign_formatted = truncate_to_width(&usign, 30);
-                        println!(
-                            "  {}  {}  {}  {}  {}",
-                            pad_to_width(&mid.to_string(), 12).cyan(),
-                            pad_to_width(&uname_formatted, 18),
-                            pad_to_width(&fans, 10),
-                            pad_to_width(&videos, 8),
-                            usign_formatted.dark_grey()
-                        );
-                    }
+                            vec![
+                                Cell::cyan(mid.to_string()),
+                                Cell::plain(uname),
+                                Cell::pink(fans),
+                                Cell::plain(videos),
+                                Cell::muted(if usign.is_empty() {
+                                    "-".to_string()
+                                } else {
+                                    usign
+                                }),
+                            ]
+                        })
+                        .collect();
+
+                    print_table(&cols, &rows);
+                    print_spacer();
                 }
                 _ => {
                     user_warning!("未找到相关用户");
@@ -164,38 +177,47 @@ pub fn handle_search(cmd: SearchCommands) -> Result<()> {
                 .as_array()
                 .or_else(|| data["result"].as_array());
 
-            println!("搜索直播间: \"{}\" (当前第 {} 页):", keyword, page);
-            println!(
-                "  {}  {}  {}  {}  {}",
-                pad_to_width("房间号", 10).dark_grey(),
-                pad_to_width("主播", 16).dark_grey(),
-                pad_to_width("分区", 14).dark_grey(),
-                pad_to_width("在线/人气", 10).dark_grey(),
-                "直播标题".dark_grey()
+            print_spacer();
+            print_section_header(
+                &format!("搜索直播间 · \"{keyword}\""),
+                Some(&format!("第 {page} 页")),
             );
-            println!("  {}", "-".repeat(80).dark_grey());
+            print_spacer();
 
             match live_rooms {
                 Some(list) if !list.is_empty() => {
-                    for item in list {
-                        let roomid = item["roomid"].as_i64().unwrap_or(0);
-                        let uname = strip_html_tags(item["uname"].as_str().unwrap_or(""));
-                        let cate_name = strip_html_tags(item["cate_name"].as_str().unwrap_or("-"));
-                        let online = format_num(&item["online"]);
-                        let title = strip_html_tags(item["title"].as_str().unwrap_or(""));
+                    let cols = [
+                        Column::left("房间号", 10),
+                        Column::left("主播", 16),
+                        Column::left("分区", 14),
+                        Column::right("人气", 10),
+                        Column::left("直播标题", 30),
+                    ];
+                    let rows: Vec<Vec<Cell>> = list
+                        .iter()
+                        .map(|item| {
+                            let roomid = item["roomid"]
+                                .as_i64()
+                                .or_else(|| item["room_id"].as_i64())
+                                .unwrap_or(0);
+                            let uname = strip_html_tags(item["uname"].as_str().unwrap_or(""));
+                            let cate_name =
+                                strip_html_tags(item["cate_name"].as_str().unwrap_or("-"));
+                            let online = format_num(&item["online"]);
+                            let title = strip_html_tags(item["title"].as_str().unwrap_or(""));
 
-                        let uname_formatted = truncate_to_width(&uname, 16);
-                        let cate_formatted = truncate_to_width(&cate_name, 14);
-                        let title_formatted = truncate_to_width(&title, 28);
-                        println!(
-                            "  {}  {}  {}  {}  {}",
-                            pad_to_width(&roomid.to_string(), 10).cyan(),
-                            pad_to_width(&uname_formatted, 16),
-                            pad_to_width(&cate_formatted, 14),
-                            pad_to_width(&online, 10),
-                            title_formatted
-                        );
-                    }
+                            vec![
+                                Cell::cyan(roomid.to_string()),
+                                Cell::plain(uname),
+                                Cell::muted(cate_name),
+                                Cell::pink(online),
+                                Cell::plain(title),
+                            ]
+                        })
+                        .collect();
+
+                    print_table(&cols, &rows);
+                    print_spacer();
                 }
                 _ => {
                     user_warning!("未找到相关直播间");
@@ -204,56 +226,61 @@ pub fn handle_search(cmd: SearchCommands) -> Result<()> {
         }
 
         SearchCommands::Hot { limit } => {
-            let data = crate::api::search::get_hot_search(Some(limit))?;
+            let data = crate::api::search::get_hot_search(Some(limit), cookies.as_ref())?;
 
             if is_json() {
                 print_json(&data)?;
                 return Ok(());
             }
 
-            println!("🔥 B站实时热搜榜单 (Top {}):", limit);
-            println!(
-                "  {}  {}  {}",
-                pad_to_width("排名", 4).dark_grey(),
-                pad_to_width("搜索关键词", 26).dark_grey(),
-                "标签".dark_grey()
-            );
-            println!("  {}", "-".repeat(44).dark_grey());
+            print_spacer();
+            print_section_header("🔥 B站实时热搜榜单", Some(&format!("Top {limit}")));
+            print_spacer();
 
-            if let Some(list) = data.as_array() {
-                for (idx, item) in list.iter().take(limit as usize).enumerate() {
-                    let rank = idx + 1;
-                    let kw = item["keyword"]
-                        .as_str()
-                        .or_else(|| item["show_name"].as_str())
-                        .unwrap_or("");
-                    let icon_name = item["icon_name"]
-                        .as_str()
-                        .or_else(|| item["label_name"].as_str())
-                        .unwrap_or("");
+            match data.as_array() {
+                Some(list) if !list.is_empty() => {
+                    let cols = [
+                        Column::right("#", 4),
+                        Column::left("热搜关键词", 30),
+                        Column::left("标签", 8),
+                    ];
+                    let rows: Vec<Vec<Cell>> = list
+                        .iter()
+                        .take(limit as usize)
+                        .enumerate()
+                        .map(|(idx, item)| {
+                            let rank = idx + 1;
+                            let kw = item["keyword"]
+                                .as_str()
+                                .or_else(|| item["show_name"].as_str())
+                                .unwrap_or("");
+                            let icon_name = item["icon_name"]
+                                .as_str()
+                                .or_else(|| item["label_name"].as_str())
+                                .unwrap_or("");
 
-                    let rank_str = match rank {
-                        1 => format!("{:>2}", rank).red().bold(),
-                        2 => format!("{:>2}", rank).yellow().bold(),
-                        3 => format!("{:>2}", rank).yellow(),
-                        _ => format!("{:>2}", rank).dark_grey(),
-                    };
+                            let rank_cell = match rank {
+                                1 => Cell::bold_colored(rank.to_string(), BILI_PINK),
+                                2 => Cell::bold_colored(rank.to_string(), Color::Yellow),
+                                3 => Cell::colored(rank.to_string(), Color::Yellow),
+                                _ => Cell::muted(rank.to_string()),
+                            };
+                            let tag_cell = if !icon_name.is_empty() {
+                                Cell::bold_colored(format!("[{icon_name}]"), BILI_PINK)
+                            } else {
+                                Cell::plain("")
+                            };
 
-                    let tag_str = if !icon_name.is_empty() {
-                        format!("[{}]", icon_name).red().to_string()
-                    } else {
-                        String::new()
-                    };
+                            vec![rank_cell, Cell::plain(kw), tag_cell]
+                        })
+                        .collect();
 
-                    println!(
-                        "  {}    {}  {}",
-                        rank_str,
-                        pad_to_width(&truncate_to_width(kw, 26), 26),
-                        tag_str
-                    );
+                    print_table(&cols, &rows);
+                    print_spacer();
                 }
-            } else {
-                user_info!("暂无热搜数据");
+                _ => {
+                    user_info!("暂无热搜数据");
+                }
             }
         }
     }

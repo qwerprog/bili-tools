@@ -33,7 +33,7 @@ pub fn print_qrcode_in_terminal(url: &str) -> Result<()> {
         .quiet_zone(true)
         .build();
 
-    println!("{}", string);
-    std::io::stdout().flush()?;
+    eprintln!("{}", string);
+    std::io::stderr().flush()?;
     Ok(())
 }

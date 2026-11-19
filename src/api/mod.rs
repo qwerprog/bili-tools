@@ -1,9 +1,14 @@
 pub mod area;
 pub mod client;
+pub mod comment;
+pub mod danmaku;
 pub mod fav;
 pub mod history;
 pub mod live;
 pub mod passport;
+pub mod rank;
 pub mod search;
+pub mod upload;
+pub mod user;
 pub mod video;
 pub mod wbi;

@@ -2,18 +2,18 @@ use crate::api::client::DEFAULT_USER_AGENT;
 use crate::auth::cookies::read_cookies;
 use crate::cli::output::{is_json, is_quiet};
 use crate::error::{BiliLiveError, Result};
-use crossterm::style::Stylize;
-use unicode_width::UnicodeWidthStr;
+use crate::ui::components::{Cell, InfoCard};
 
-// 通过 live_key 获取直播统计信息（下播后调用）
-pub fn get_live_info(live_id: u64) -> Result<()> {
-    if is_json() || is_quiet() {
-        return Ok(());
+/// 拉取本场直播统计原始 JSON 数据（静默模式下跳过请求）
+pub fn fetch_live_stats_data(live_id: u64) -> Result<Option<serde_json::Value>> {
+    if is_quiet() {
+        return Ok(None);
     }
 
     let cookies = read_cookies()?;
     let url = format!(
-        "https://api.live.bilibili.com/xlive/app-blink/v1/live/StopLiveData?live_key={}",
+        "{}/xlive/app-blink/v1/live/StopLiveData?live_key={}",
+        crate::api::client::live_api_base_url(),
         live_id
     );
 
@@ -23,8 +23,8 @@ pub fn get_live_info(live_id: u64) -> Result<()> {
         .with_header("Cookie", cookies.cookie_header())
         .send()?;
 
-    let response_text = response.as_str()?;
-    let res: serde_json::Value = serde_json::from_str(response_text)?;
+    let res: serde_json::Value =
+        crate::api::client::parse_json_response(&response, "获取直播统计失败")?;
 
     if res["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
@@ -33,50 +33,54 @@ pub fn get_live_info(live_id: u64) -> Result<()> {
         )));
     }
 
-    let data = &res["data"];
+    Ok(Some(res["data"].clone()))
+}
 
-    println!("  {:>6}", "统计".dark_grey());
-
-    let stats: &[(&str, String)] = &[
-        (
-            "新增粉丝",
-            data["AddFans"].as_i64().unwrap_or(0).to_string(),
-        ),
-        (
-            "弹幕数量",
-            data["DanmuNum"].as_i64().unwrap_or(0).to_string(),
-        ),
-        (
-            "直播时长",
-            format_duration(data["LiveTime"].as_i64().unwrap_or(0)),
-        ),
-        (
-            "最大在线",
-            data["MaxOnline"].as_i64().unwrap_or(0).to_string(),
-        ),
-        (
-            "累计观看",
-            data["WatchedCount"].as_i64().unwrap_or(0).to_string(),
-        ),
-        (
-            "粉丝勋章",
-            data["NewFansClub"].as_i64().unwrap_or(0).to_string(),
-        ),
-        (
-            "金仓鼠",
-            data["HamsterRmb"].as_i64().unwrap_or(0).to_string(),
-        ),
-    ];
-    let max_width = stats
-        .iter()
-        .map(|(k, _)| UnicodeWidthStr::width(*k))
-        .max()
-        .unwrap_or(8);
-    for (key, val) in stats {
-        let pad = max_width - UnicodeWidthStr::width(*key);
-        println!("  {}{}  {}", key.dark_grey(), " ".repeat(pad), val);
+// 通过 live_key 获取并打印直播统计信息（下播后或查看状态时调用）
+pub fn get_live_info(live_id: u64) -> Result<()> {
+    if is_json() || is_quiet() {
+        return Ok(());
     }
 
+    let Some(data) = fetch_live_stats_data(live_id)? else {
+        return Ok(());
+    };
+
+    let add_fans = data["AddFans"].as_i64().unwrap_or(0);
+    let fans_cell = if add_fans > 0 {
+        Cell::pink(format!("+{add_fans}"))
+    } else {
+        Cell::plain(add_fans.to_string())
+    };
+
+    let card = InfoCard::new("📊 本场直播统计")
+        .add_row(
+            "直播时长",
+            Cell::cyan(format_duration(data["LiveTime"].as_i64().unwrap_or(0))),
+        )
+        .add_plain_row(
+            "累计观看",
+            data["WatchedCount"].as_i64().unwrap_or(0).to_string(),
+        )
+        .add_plain_row(
+            "最大在线",
+            data["MaxOnline"].as_i64().unwrap_or(0).to_string(),
+        )
+        .add_plain_row(
+            "弹幕数量",
+            data["DanmuNum"].as_i64().unwrap_or(0).to_string(),
+        )
+        .add_row("新增粉丝", fans_cell)
+        .add_plain_row(
+            "粉丝勋章",
+            data["NewFansClub"].as_i64().unwrap_or(0).to_string(),
+        )
+        .add_plain_row(
+            "金仓鼠",
+            data["HamsterRmb"].as_i64().unwrap_or(0).to_string(),
+        );
+
+    card.print();
     Ok(())
 }
 

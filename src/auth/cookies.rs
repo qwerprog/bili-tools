@@ -2,8 +2,9 @@ use crate::api::client::DEFAULT_USER_AGENT;
 use crate::api::passport::get_roomid;
 use crate::error::{BiliLiveError, Result};
 use crate::user_success;
-use crate::utils::paths::{data_file, write_private};
+use crate::utils::paths::{cookies_path, write_private};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// 完整的 Bilibili 登录凭据与设备指纹结构
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -79,12 +80,17 @@ impl Cookies {
         parts.join("; ")
     }
 
+    /// 保存到指定路径，以 0600 权限写入
+    pub fn save_to(&self, path: &Path) -> Result<()> {
+        let cookies_json = serde_json::to_string_pretty(self)?;
+        write_private(path, cookies_json.as_bytes())?;
+        Ok(())
+    }
+
     /// 保存到配置文件，以 0600 权限写入
     pub fn save(&self) -> Result<()> {
-        let path = data_file("cookies.json")?;
-        let cookies_json = serde_json::to_string_pretty(self)?;
-        write_private(&path, cookies_json.as_bytes())?;
-        Ok(())
+        let path = cookies_path()?;
+        self.save_to(&path)
     }
 
     /// 确保拥有 buvid3 和 buvid4；若缺失则自动从接口拉取并更新保存
@@ -106,11 +112,16 @@ impl Cookies {
 
 /// 从 B站官方接口获取设备指纹 buvid3 和 buvid4
 pub fn fetch_buvid() -> Result<(String, String)> {
-    let response = crate::api::client::get("https://api.bilibili.com/x/frontend/finger/spi")
+    let url = format!(
+        "{}/x/frontend/finger/spi",
+        crate::api::client::api_base_url()
+    );
+    let response = crate::api::client::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .send()?;
 
-    let json: serde_json::Value = serde_json::from_str(response.as_str()?)?;
+    let json: serde_json::Value =
+        crate::api::client::parse_json_response(&response, "获取 buvid 失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "获取 buvid 失败: {}",
@@ -157,26 +168,39 @@ pub fn save_full_cookies(cookies: &Cookies) -> Result<()> {
     Ok(())
 }
 
-pub fn update_live_key(live_key: Option<u64>) -> Result<()> {
-    let mut cookies = read_cookies()?;
+pub fn update_live_key_at(path: &Path, live_key: Option<u64>) -> Result<()> {
+    let mut cookies = read_cookies_from(path)?;
     cookies.live_key = live_key;
-    cookies.save()?;
+    cookies.save_to(path)?;
     Ok(())
 }
 
-pub fn delete_cookies() -> Result<()> {
-    let path = data_file("cookies.json")?;
+pub fn update_live_key(live_key: Option<u64>) -> Result<()> {
+    let path = cookies_path()?;
+    update_live_key_at(&path, live_key)
+}
+
+pub fn delete_cookies_at(path: &Path) -> Result<()> {
     if path.exists() {
-        std::fs::remove_file(&path)?;
+        std::fs::remove_file(path)?;
     }
     Ok(())
 }
 
-pub fn read_cookies() -> Result<Cookies> {
-    let path = data_file("cookies.json")?;
-    let cookies_str = std::fs::read_to_string(&path).map_err(BiliLiveError::Io)?;
+pub fn delete_cookies() -> Result<()> {
+    let path = cookies_path()?;
+    delete_cookies_at(&path)
+}
+
+pub fn read_cookies_from(path: &Path) -> Result<Cookies> {
+    let cookies_str = std::fs::read_to_string(path).map_err(BiliLiveError::Io)?;
     let cookies: Cookies = serde_json::from_str(&cookies_str).map_err(BiliLiveError::Json)?;
     Ok(cookies)
+}
+
+pub fn read_cookies() -> Result<Cookies> {
+    let path = cookies_path()?;
+    read_cookies_from(&path)
 }
 
 #[cfg(test)]
@@ -249,5 +273,29 @@ mod tests {
             let meta = std::fs::metadata(&path).unwrap();
             assert_eq!(meta.permissions().mode() & 0o777, 0o600);
         }
+    }
+
+    #[test]
+    fn test_explicit_path_cookie_crud_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nested").join("custom_cookies.json");
+
+        let cookies = Cookies {
+            sessdata: "sess_custom".to_string(),
+            bili_jct: "jct_custom".to_string(),
+            dede_user_id: "42".to_string(),
+            ..Default::default()
+        };
+        cookies.save_to(&path).unwrap();
+
+        let loaded = read_cookies_from(&path).unwrap();
+        assert_eq!(loaded, cookies);
+
+        update_live_key_at(&path, Some(987654321)).unwrap();
+        let updated = read_cookies_from(&path).unwrap();
+        assert_eq!(updated.live_key, Some(987654321));
+
+        delete_cookies_at(&path).unwrap();
+        assert!(!path.exists());
     }
 }
