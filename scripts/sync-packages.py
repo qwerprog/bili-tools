@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Update package manifests from Cargo.toml and the release SHA256SUMS."""
 import argparse
+from datetime import date
 import re
 import tomllib
 from pathlib import Path
@@ -16,7 +17,7 @@ for line in args.checksums.read_text().splitlines():
     if not re.fullmatch(r'[a-fA-F0-9]{64}', digest):
         raise ValueError(f'Invalid SHA256 for {name}')
     hashes[name.lstrip('*')] = digest.lower()
-base = f'https://github.com/QwerProg/bili-tools/releases/download/v{version}'
+base = f'https://github.com/qwerprog/bili-tools/releases/download/v{version}'
 for platform, ext in [('windows', 'zip'), ('macos', 'zip'), ('linux', 'tar.gz')]:
     for arch in ['x86_64', 'arm64']:
         if f'bt-{arch}-{platform}.{ext}' not in hashes:
@@ -30,34 +31,69 @@ for arch in ['x86_64', 'arm64']:
     text = re.sub(rf'(bt-{arch}-macos.zip"\s+sha256 ")[^"]+', lambda m: m[1] + hashes[f'bt-{arch}-macos.zip'], text)
 brew.write_text(text)
 
-winget = ROOT / 'pkg/winget/QwerProg.bt.installer.yaml'
-text = winget.read_text()
-text = re.sub(r'PackageVersion: .*', f'PackageVersion: {version}', text)
-start = text.index('Installers:')
-end = text.index('ManifestType:', start)
-installers = 'Installers:\n'
+today = date.today().isoformat()
+installer_entries = 'Installers:\n'
 for arch, file in [('x64', 'bt-x86_64-windows.zip'), ('arm64', 'bt-arm64-windows.zip')]:
-    installers += f'''  - Architecture: {arch}
+    installer_entries += f'''  - Architecture: {arch}
     InstallerUrl: {base}/{file}
-    InstallerType: zip
-    NestedInstallerType: portable
-    NestedInstallerFiles:
-      - RelativeFilePath: bt.exe
-        PortableCommandAlias: bt
     InstallerSha256: {hashes[file]}
 '''
-winget.write_text(text[:start] + installers + text[end:])
 
+installer_manifest = f'''# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+
+PackageIdentifier: QwerProg.bt
+PackageVersion: {version}
+InstallerLocale: en-US
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: bt.exe
+    PortableCommandAlias: bt
+ReleaseDate: {today}
+{installer_entries}ManifestType: installer
+ManifestVersion: 1.12.0
+'''
+
+locale_manifest = f'''# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+PackageIdentifier: QwerProg.bt
+PackageVersion: {version}
+PackageLocale: en-US
+Publisher: QwerProg
+PublisherUrl: https://github.com/qwerprog/bili-tools
+PublisherSupportUrl: https://github.com/qwerprog/bili-tools/issues
+PackageName: bt
+PackageUrl: https://github.com/qwerprog/bili-tools
+License: MIT
+LicenseUrl: https://github.com/qwerprog/bili-tools/blob/main/LICENSE
+ShortDescription: B站工具箱 (Bilibili CLI toolbox)
+Moniker: bt
+Tags:
+  - bilibili
+  - live
+  - stream
+  - cli
+  - toolbox
+ReleaseNotesUrl: https://github.com/qwerprog/bili-tools/releases/tag/v{version}
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0
+'''
+
+version_manifest = f'''# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
+
+PackageIdentifier: QwerProg.bt
+PackageVersion: {version}
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.12.0
+'''
+
+(ROOT / 'pkg/winget/QwerProg.bt.installer.yaml').write_text(installer_manifest)
 winget_dir = ROOT / f'pkg/winget-pkgs/manifests/q/QwerProg/bt/{version}'
 winget_dir.mkdir(parents=True, exist_ok=True)
-installer = f"PackageIdentifier: QwerProg.bt\nPackageVersion: {version}\n" + installers + "ManifestType: installer\nManifestVersion: 1.9.0\n"
-(winget_dir / 'QwerProg.bt.installer.yaml').write_text(installer)
-for filename in ['QwerProg.bt.locale.en-US.yaml', 'QwerProg.bt.yaml']:
-    template = (ROOT / 'pkg/winget-pkgs/manifests/q/QwerProg/bt/0.1.1' / filename).read_text()
-    template = re.sub(r'PackageVersion: .*', f'PackageVersion: {version}', template)
-    if 'locale' in filename:
-        template = template.replace('ManifestType:', f'ReleaseNotesUrl: https://github.com/QwerProg/bili-tools/releases/tag/v{version}\nManifestType:')
-    (winget_dir / filename).write_text(template)
+(winget_dir / 'QwerProg.bt.installer.yaml').write_text(installer_manifest)
+(winget_dir / 'QwerProg.bt.locale.en-US.yaml').write_text(locale_manifest)
+(winget_dir / 'QwerProg.bt.yaml').write_text(version_manifest)
 
 aur = ROOT / 'pkg/aur-bin/PKGBUILD'
 aur.parent.mkdir(parents=True, exist_ok=True)
