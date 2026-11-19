@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Update package manifests from Cargo.toml and the release SHA256SUMS."""
 import argparse
-import json
 import re
 import tomllib
 from pathlib import Path
@@ -22,17 +21,6 @@ for platform, ext in [('windows', 'zip'), ('macos', 'zip'), ('linux', 'tar.gz')]
     for arch in ['x86_64', 'arm64']:
         if f'bt-{arch}-{platform}.{ext}' not in hashes:
             raise ValueError(f'Missing {arch} {platform} checksum')
-
-scoop = json.loads((ROOT / 'pkg/scoop/bt.json').read_text())
-scoop['version'] = version
-scoop['architecture'] = {
-    arch: {'url': f'{base}/{file}', 'hash': hashes[file]}
-    for arch, file in [('64bit', 'bt-x86_64-windows.zip'), ('arm64', 'bt-arm64-windows.zip')]
-}
-for path in ['pkg/scoop/bt.json', 'bucket/bt.json']:
-    target = ROOT / path
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(scoop, ensure_ascii=False, indent=2) + '\n')
 
 brew = ROOT / 'pkg/homebrew/Formula/bt.rb'
 text = brew.read_text()
@@ -77,20 +65,20 @@ aur.write_text(f'''# Maintainer: QwerProg
 pkgname=bili-tools-bin
 pkgver={version}
 pkgrel=1
-pkgdesc="B站直播开播工具 — 命令行一键开播/下播 (预编译二进制版)"
+pkgdesc="A multi-functional CLI tool for Bilibili (precompiled binary)"
 arch=('x86_64' 'aarch64')
-url="https://github.com/QwerProg/bili-tools"
+url="https://github.com/qwerprog/bili-tools"
 license=('MIT')
 depends=('gcc-libs')
 provides=('bili-tools')
 conflicts=('bili-tools' 'bili-tools-git')
 options=('!debug')
-source_x86_64=("bt-${{pkgver}}-x86_64-linux.tar.gz::https://github.com/QwerProg/bili-tools/releases/download/v${{pkgver}}/bt-x86_64-linux.tar.gz")
-source_aarch64=("bt-${{pkgver}}-arm64-linux.tar.gz::https://github.com/QwerProg/bili-tools/releases/download/v${{pkgver}}/bt-arm64-linux.tar.gz")
+source_x86_64=("bt-${{pkgver}}-x86_64-linux.tar.gz::https://github.com/qwerprog/bili-tools/releases/download/v${{pkgver}}/bt-x86_64-linux.tar.gz")
+source_aarch64=("bt-${{pkgver}}-arm64-linux.tar.gz::https://github.com/qwerprog/bili-tools/releases/download/v${{pkgver}}/bt-arm64-linux.tar.gz")
 sha256sums_x86_64=('{hashes['bt-x86_64-linux.tar.gz']}')
 sha256sums_aarch64=('{hashes['bt-arm64-linux.tar.gz']}')
 package() {{
   install -Dm755 "${{srcdir}}/bt" "${{pkgdir}}/usr/bin/bt"
 }}
 ''')
-print(f'Updated Scoop, Homebrew, WinGet and AUR manifests to {version}')
+print(f'Updated Homebrew, WinGet and AUR manifests to {version}')
