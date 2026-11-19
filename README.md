@@ -82,7 +82,7 @@ bt auth logout                             # 退出登录并清除凭证
 
 # 直播模块
 bt live start                              # 交互式开播
-bt live start -a 398 -t "标题"             # 指定分区与标题直接开播
+bt live start -a 398 -t "标题"              # 指定分区与标题直接开播
 bt live stop                               # 立即下播
 bt live stop -d 30m                        # 30分钟后下播（Ctrl+C 取消）
 bt live status                             # 查看自己直播间实时状态
