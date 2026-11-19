@@ -1183,7 +1183,7 @@ fn t5_c2_07_ffmpeg_version_failure_exec_cleanup_and_bt_ffmpeg_path_override() {
     // 3. Empty PATH + BT_FFMPEG_PATH override succeeds
     let env_override = TestEnv::new().with_server(&server).without_ffmpeg();
     env_override.install_fake_ffmpeg();
-    let ff_path = env_override.bin_dir().join("ffmpeg");
+    let ff_path = env_override.fake_ffmpeg_path();
     let out_c = env_override.run_bt_env(
         &[
             "--json",

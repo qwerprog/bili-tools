@@ -3321,8 +3321,17 @@ impl TestEnv {
         self
     }
 
+    #[allow(dead_code)]
+    pub fn fake_ffmpeg_path(&self) -> PathBuf {
+        self.bin_dir.join(if cfg!(windows) {
+            "ffmpeg.exe"
+        } else {
+            "ffmpeg"
+        })
+    }
+
     pub fn without_ffmpeg(mut self) -> Self {
-        let ff = self.bin_dir.join("ffmpeg");
+        let ff = self.fake_ffmpeg_path();
         if ff.exists() {
             let _ = std::fs::remove_file(ff);
         }
@@ -3368,10 +3377,12 @@ impl TestEnv {
     }
 
     pub fn install_fake_ffmpeg(&self) {
-        let default_log = self.ffmpeg_log_path();
-        let default_log_escaped = default_log.to_string_lossy().replace('\'', "'\\''");
-        let script = format!(
-            r#"#!/bin/sh
+        #[cfg(unix)]
+        {
+            let default_log = self.ffmpeg_log_path();
+            let default_log_escaped = default_log.to_string_lossy().replace('\'', "'\\''");
+            let script = format!(
+                r#"#!/bin/sh
 set -eu
 
 log_file="${{FAKE_FFMPEG_LOG:-}}"
@@ -3424,15 +3435,87 @@ case "$last_arg" in
 esac
 exit 0
 "#
-        );
+            );
 
-        let ff_path = self.bin_dir.join("ffmpeg");
-        std::fs::write(&ff_path, script).expect("write fake ffmpeg script");
-        #[cfg(unix)]
-        {
+            let ff_path = self.fake_ffmpeg_path();
+            std::fs::write(&ff_path, script).expect("write fake ffmpeg script");
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&ff_path, std::fs::Permissions::from_mode(0o755))
                 .expect("chmod 0755 fake ffmpeg");
+        }
+
+        #[cfg(windows)]
+        {
+            static FAKE_FFMPEG_EXE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+            let cached_exe = FAKE_FFMPEG_EXE.get_or_init(|| {
+                let target_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target");
+                let _ = std::fs::create_dir_all(&target_dir);
+                let helper_exe = target_dir.join("test-fake-ffmpeg.exe");
+                if !helper_exe.exists() {
+                    let src = r#"
+use std::io::Write;
+use std::path::PathBuf;
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let log_path = std::env::var_os("FAKE_FFMPEG_LOG")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().and_then(|d| d.parent()).map(|d| d.join("ffmpeg.log")))
+                .unwrap_or_else(|| PathBuf::from("ffmpeg.log"))
+        });
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+        let _ = writeln!(f, "{}", args.join(" "));
+    }
+    let fail = std::env::var("FAKE_FFMPEG_FAIL").unwrap_or_default();
+    if fail == "1" {
+        eprintln!("mock ffmpeg forced failure");
+        std::process::exit(1);
+    }
+    if args.first().map(String::as_str) == Some("-version") {
+        println!("ffmpeg version 6.0-mock");
+        println!("built with mock harness");
+        return;
+    }
+    if fail == "exec" {
+        eprintln!("mock ffmpeg execution failure");
+        std::process::exit(1);
+    }
+    if let Some(last) = args.last() {
+        if !last.is_empty() && !last.starts_with('-') && last != "null" {
+            let lower = last.to_ascii_lowercase();
+            let bytes: &[u8] = if lower.ends_with(".flv") {
+                b"FLV\x01\x05\x00\x00\x00\x09\x00\x00\x00\x00"
+            } else if lower.ends_with(".mp4") || lower.ends_with(".m4a") || lower.ends_with(".m4s") {
+                b"\x00\x00\x00\x14ftypisom\x00\x00\x02\x00isomiso2"
+            } else {
+                b"FAKE_FFMPEG_OUTPUT\n"
+            };
+            let _ = std::fs::write(last, bytes);
+        }
+    }
+}
+"#;
+                    let pid = std::process::id();
+                    let src_path = target_dir.join(format!("test-fake-ffmpeg-{pid}.rs"));
+                    let tmp_exe = target_dir.join(format!("test-fake-ffmpeg-{pid}.exe"));
+                    std::fs::write(&src_path, src).expect("write fake ffmpeg rs");
+                    let status = Command::new("rustc")
+                        .arg(&src_path)
+                        .arg("-o")
+                        .arg(&tmp_exe)
+                        .status()
+                        .expect("compile fake ffmpeg exe");
+                    assert!(status.success(), "rustc failed compiling fake ffmpeg");
+                    let _ = std::fs::remove_file(&src_path);
+                    let _ = std::fs::rename(&tmp_exe, &helper_exe);
+                    let _ = std::fs::remove_file(&tmp_exe);
+                }
+                helper_exe
+            });
+            std::fs::copy(cached_exe, self.fake_ffmpeg_path()).expect("copy fake ffmpeg.exe");
         }
     }
 
@@ -3446,6 +3529,8 @@ exit 0
             .current_dir(&self.work_dir)
             .stdin(Stdio::null())
             .env("HOME", &self.home_dir)
+            .env("APPDATA", &self.xdg_dir)
+            .env("LOCALAPPDATA", &self.xdg_dir)
             .env("XDG_CONFIG_HOME", &self.xdg_dir)
             .env("XDG_DATA_HOME", self.xdg_dir.join("data"))
             .env("XDG_CACHE_HOME", self.xdg_dir.join("cache"))

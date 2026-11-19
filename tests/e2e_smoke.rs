@@ -847,11 +847,11 @@ fn smoke_test_env_cookie_isolation_and_ffmpeg_modes() {
 
     // 1. without_ffmpeg -> no ffmpeg binary in bin_dir or PATH
     let env_missing = TestEnv::new().without_ffmpeg();
-    assert!(!env_missing.bin_dir().join("ffmpeg").exists());
+    assert!(!env_missing.fake_ffmpeg_path().exists());
 
     // 2. with_fake_ffmpeg -> -version, .mp4, .flv + ffmpeg.log
     let env_fake = TestEnv::new().with_fake_ffmpeg();
-    let ff = env_fake.bin_dir().join("ffmpeg");
+    let ff = env_fake.fake_ffmpeg_path();
     let ver_out = Command::new(&ff)
         .arg("-version")
         .env("PATH", env_fake.bin_dir())
@@ -896,7 +896,7 @@ fn smoke_test_env_cookie_isolation_and_ffmpeg_modes() {
     // 2b. Fake ffmpeg with FAKE_FFMPEG_LOG removed from env, PATH strictly restricted to env.bin_dir(),
     //     and uppercase container extensions (.MP4, .FLV)
     let env_default_log = TestEnv::new().with_fake_ffmpeg();
-    let ff_default = env_default_log.bin_dir().join("ffmpeg");
+    let ff_default = env_default_log.fake_ffmpeg_path();
     let no_log_ver = Command::new(&ff_default)
         .arg("-version")
         .env("PATH", env_default_log.bin_dir())
@@ -934,7 +934,7 @@ fn smoke_test_env_cookie_isolation_and_ffmpeg_modes() {
 
     // 3. with_failing_ffmpeg -> FAKE_FFMPEG_FAIL=1 fails -version
     let env_fail = TestEnv::new().with_failing_ffmpeg();
-    let fail_ver = Command::new(env_fail.bin_dir().join("ffmpeg"))
+    let fail_ver = Command::new(env_fail.fake_ffmpeg_path())
         .arg("-version")
         .env("FAKE_FFMPEG_FAIL", "1")
         .env("FAKE_FFMPEG_LOG", env_fail.ffmpeg_log_path())
@@ -944,14 +944,14 @@ fn smoke_test_env_cookie_isolation_and_ffmpeg_modes() {
 
     // 4. with_failing_ffmpeg_exec -> -version passes, mux fails
     let env_fail_exec = TestEnv::new().with_failing_ffmpeg_exec();
-    let ok_ver = Command::new(env_fail_exec.bin_dir().join("ffmpeg"))
+    let ok_ver = Command::new(env_fail_exec.fake_ffmpeg_path())
         .arg("-version")
         .env("FAKE_FFMPEG_FAIL", "exec")
         .env("FAKE_FFMPEG_LOG", env_fail_exec.ffmpeg_log_path())
         .output()
         .unwrap();
     assert!(ok_ver.status.success());
-    let fail_mux = Command::new(env_fail_exec.bin_dir().join("ffmpeg"))
+    let fail_mux = Command::new(env_fail_exec.fake_ffmpeg_path())
         .args(["-i", "in.m4s", "out.mp4"])
         .current_dir(env_fail_exec.work_dir())
         .env("FAKE_FFMPEG_FAIL", "exec")
@@ -963,8 +963,14 @@ fn smoke_test_env_cookie_isolation_and_ffmpeg_modes() {
 
 #[test]
 fn smoke_bt_output_helpers() {
+    #[cfg(unix)]
     let ok_status = Command::new("/bin/sh")
         .args(["-c", "printf '{\"hello\":\"world\"}'"])
+        .output()
+        .unwrap();
+    #[cfg(windows)]
+    let ok_status = Command::new("powershell")
+        .args(["-NoProfile", "-Command", "[Console]::Write('{\"hello\":\"world\"}')"])
         .output()
         .unwrap();
     let ok_out = BtOutput {
@@ -979,10 +985,20 @@ fn smoke_bt_output_helpers() {
         .assert_no_ansi()
         .assert_stdout_contains("world");
 
+    #[cfg(unix)]
     let err_status = Command::new("/bin/sh")
         .args([
             "-c",
             "printf '{\"ok\":false,\"error\":{\"kind\":\"Input\",\"message\":\"bad\"}}' && printf 'diag' >&2 && exit 1",
+        ])
+        .output()
+        .unwrap();
+    #[cfg(windows)]
+    let err_status = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "[Console]::Write('{\"ok\":false,\"error\":{\"kind\":\"Input\",\"message\":\"bad\"}}'); [Console]::Error.Write('diag'); exit 1",
         ])
         .output()
         .unwrap();
@@ -995,7 +1011,13 @@ fn smoke_bt_output_helpers() {
     err_out.assert_json_err(Some("Input"));
     err_out.assert_stderr_contains("diag");
 
+    #[cfg(unix)]
     let empty_status = Command::new("/bin/sh").args(["-c", "true"]).output().unwrap();
+    #[cfg(windows)]
+    let empty_status = Command::new("powershell")
+        .args(["-NoProfile", "-Command", "exit 0"])
+        .output()
+        .unwrap();
     let empty_out = BtOutput {
         status: empty_status.status,
         code: empty_status.status.code().unwrap_or(-1),
