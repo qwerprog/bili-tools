@@ -87,10 +87,13 @@ fn t2_f01_05() {
     assert!(!missing_nested.exists());
     assert!(!missing_nested.parent().unwrap().exists());
 
+    let blocker = env.write_work_file("blocker_file", b"x");
+    let bad_cookie_path = blocker.join("bad/c.json");
+    let bad_cookie_str = bad_cookie_path.to_string_lossy().into_owned();
     let out_b = env.run_bt(&[
         "--json",
         "-u",
-        "/dev/null/bad/c.json",
+        &bad_cookie_str,
         "auth",
         "login",
         "--method",
@@ -323,13 +326,16 @@ fn t2_f03_04() {
     let server = MockBiliServer::start();
     let env = TestEnv::new().with_server(&server).with_fake_ffmpeg();
 
+    let blocker = env.write_work_file("blocker_file", b"x");
+    let bad_out = blocker.join("sub/out.mp4");
+    let bad_out_str = bad_out.to_string_lossy().into_owned();
     let out = env.run_bt(&[
         "--json",
         "video",
         "download",
         "BV1uJ411r7hL",
         "-o",
-        "/dev/null/sub/out.mp4",
+        &bad_out_str,
     ]);
     let v = out.assert_json_err(None);
     assert!(matches!(
@@ -1256,13 +1262,16 @@ fn t2_f11_05() {
     let server = MockBiliServer::start();
     let env = TestEnv::new().with_server(&server);
 
+    let blocker = env.write_work_file("blocker_file", b"x");
+    let bad_dm = blocker.join("sub/dm.ass");
+    let bad_dm_str = bad_dm.to_string_lossy().into_owned();
     let out = env.run_bt(&[
         "--json",
         "video",
         "danmaku",
         "BV1uJ411r7hL",
         "-o",
-        "/dev/null/sub/dm.ass",
+        &bad_dm_str,
     ]);
     out.assert_json_err(Some("Io"));
     assert!(out.stderr.trim().is_empty());
