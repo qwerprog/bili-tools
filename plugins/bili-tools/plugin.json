@@ -1,0 +1,12 @@
+{
+  "name": "bili-tools",
+  "version": "1.0.1",
+  "description": "Antigravity plugin for operating Bilibili via the bit CLI (videos, bangumi, comments, upload, live streaming & recording).",
+  "logo": "assets/logo.svg",
+  "author": {
+    "name": "QwerProg",
+    "url": "https://github.com/qwerprog"
+  },
+  "homepage": "https://github.com/qwerprog/bili-tools",
+  "repository": "https://github.com/qwerprog/bili-tools"
+}

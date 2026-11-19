@@ -142,6 +142,9 @@ bit -u /tmp/alt.json auth status            # 指定自定义 Cookie 文件路�
 
 # Shell 补全
 bit completions --install                   # 自动识别当前 Shell 并安装补全（也支持指定 bash/zsh/fish/powershell/elvish）
+
+# Antigravity AI Agent 插件
+agy plugin install https://github.com/qwerprog/bili-tools/tree/main/plugins/bili-tools
 ```
 
 ### 命令架构
