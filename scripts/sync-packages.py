@@ -48,7 +48,7 @@ for formula_name, class_name in [('bili-tools', 'BiliTools'), ('bit', 'Bit'), ('
     brew = ROOT / f'pkg/homebrew/Formula/{formula_name}.rb'
     brew.parent.mkdir(parents=True, exist_ok=True)
     brew.write_text(f'''class {class_name} < Formula
-  desc "B站工具箱 — 命令行多功能工具与一键开播/下播"
+  desc "B站终端多功能工具箱 (Bilibili CLI toolbox)"
   homepage "https://github.com/qwerprog/bili-tools"
   version "{version}"
   license "MIT"

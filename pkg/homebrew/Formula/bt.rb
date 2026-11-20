@@ -1,5 +1,5 @@
 class Bt < Formula
-  desc "B站工具箱 — 命令行多功能工具与一键开播/下播"
+  desc "B站终端多功能工具箱 (Bilibili CLI toolbox)"
   homepage "https://github.com/qwerprog/bili-tools"
   version "1.0.1"
   license "MIT"

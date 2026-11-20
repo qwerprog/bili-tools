@@ -2,7 +2,7 @@
 pkgname=bili-tools-git
 pkgver=0.1.6
 pkgrel=1
-pkgdesc="B站工具箱 — 命令行多功能工具与一键开播/下播"
+pkgdesc="B站终端多功能工具箱 (Bilibili CLI toolbox)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/qwerprog/bili-tools"
 license=('MIT')
