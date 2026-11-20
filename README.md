@@ -8,20 +8,6 @@ B站终端多功能工具箱，提供开播下播、账号管理、视频检索�
 
 ## 安装
 
-### Cargo (通用)
-
-```bash
-# 首次需安装 Rust 工具链
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# 克隆并编译安装
-git clone https://github.com/qwerprog/bili-tools.git --depth=1
-cd bili-tools
-cargo install --path .
-```
-
-编译安装到 `~/.cargo/bin/bit`，确认该目录在 PATH 中即可。
-
 ### macOS (Homebrew)
 
 ```bash
@@ -38,15 +24,29 @@ yay -S bili-tools-bin
 paru -S bili-tools-bin
 ```
 
-### Windows
+### Windows (WinGet)
 
-#### Winget
 ```bash
 winget install QwerProg.bili-tools
 ```
 
-#### 手动下载
-从 [Releases](https://github.com/qwerprog/bili-tools/releases) 下载 `bit-v版本号-windows-amd64.zip`，解压后即可运行。
+### 手动下载预编译包 (Releases)
+
+前往 [GitHub Releases](https://github.com/qwerprog/bili-tools/releases) 下载对应平台的预编译压缩包（解压即用）：
+- **Windows**: `bit-v1.0.2-windows-amd64.zip` / `bit-v1.0.2-windows-arm64.zip`
+- **macOS**: `bit-v1.0.2-darwin-arm64.zip` / `bit-v1.0.2-darwin-amd64.zip`
+- **Linux**: `bit-v1.0.2-linux-amd64.tar.gz` / `bit-v1.0.2-linux-arm64.tar.gz`
+
+### Cargo (源码编译)
+
+```bash
+# 克隆并编译安装
+git clone https://github.com/qwerprog/bili-tools.git --depth=1
+cd bili-tools
+cargo install --path .
+```
+
+编译安装到 `~/.cargo/bin/bit`，确认该目录在 PATH 中即可。
 
 ## 快速使用
 
@@ -262,40 +262,70 @@ Linux/macOS 上，数据目录权限为 `0700`，Cookie 和推流信息文件为
 ## 架构
 
 ```mermaid
-graph TD
-    main --> cli
-    cli --> resolve_cli[cli::resolve]
-    cli --> auth_cli[cli::auth]
-    cli --> live_cli[cli::live]
-    cli --> search_cli[cli::search]
-    cli --> video_cli[cli::video]
-    cli --> user_cli[cli::user]
-    cli --> feed_cli[cli::feed]
-    cli --> rank_cli[cli::rank]
-    cli --> fav_cli[cli::fav]
-    cli --> later_cli[cli::later]
-    cli --> history_cli[cli::history]
-    cli --> completions_cli[cli::completions]
+flowchart TD
+    subgraph IN ["调用入口与控制"]
+        direction LR
+        cli_u["终端用户 (CLI)"]
+        agent_u["AI Agent (Plugin)"]
+        router["bit 核心分发路由<br/>(全局参数: --json / -q / -y / -D / -u)"]
+        cli_u --> router
+        agent_u -- "--json" --> router
+    end
 
-    auth_cli --> auth
-    auth_cli --> passport[api::passport]
-    live_cli --> live
-    live_cli --> live_api[api::live]
-    search_cli --> search_api[api::search]
-    video_cli --> video_api[api::video]
-    video_cli --> danmaku_api[api::danmaku]
-    video_cli --> comment_api[api::comment]
-    user_cli --> user_api[api::user]
-    feed_cli --> user_api
-    rank_cli --> rank_api[api::rank]
-    fav_cli --> fav_api[api::fav]
-    later_cli --> history_api[api::history]
-    history_cli --> history_api
+    subgraph APP ["业务命令层 (src/cli)"]
+        direction TB
+        subgraph ROW1 ["认证与直播"]
+            direction LR
+            c_auth["bit auth<br/>(账号登录 / 会话检查)"]
+            c_live["bit live<br/>(直播控制 / 拉流录制)"]
+        end
+        subgraph ROW2 ["检索与内容"]
+            direction LR
+            c_video["bit video<br/>(详情/流/字幕/总结/弹幕/评论/下载)"]
+            c_search["bit search / rank / resolve<br/>(综合搜索/全站榜单/短链解析)"]
+        end
+        subgraph ROW3 ["用户与数据"]
+            direction LR
+            c_user["bit user / feed<br/>(UP主空间/投稿/动态流)"]
+            c_fav["bit fav / later / history<br/>(收藏夹/稍后再看/播放历史)"]
+        end
+    end
 
-    search_api --> wbi[api::wbi]
-    video_api --> wbi
-    user_api --> wbi
-    live_api --> wbi
+    subgraph CORE ["核心服务与持久化 (src/auth, src/live)"]
+        direction LR
+        s_auth["auth::session & cookies<br/>(凭据隔离 / 登录保活)"]
+        s_live["live::manager & stream<br/>(开播下播 / 直播推拉流)"]
+    end
+
+    subgraph API ["B站 API 与网络基建 (src/api)"]
+        subgraph API_BIZ ["业务接口模块"]
+            direction LR
+            a_passport["passport"]
+            a_live["live"]
+            a_video["video / danmaku / comment"]
+            a_user["user / search / fav / history"]
+        end
+        subgraph API_NET ["底层网络与安全"]
+            direction LR
+            a_client["api::client<br/>(连接池 / 错误映射 / DoH 国内直连)"]
+            a_wbi["api::wbi<br/>(Wbi 鉴权签名算法)"]
+        end
+    end
+
+    router --> APP
+    c_auth --> s_auth
+    c_live --> s_live
+
+    s_auth --> a_passport
+    s_live --> a_live
+    c_video --> a_video
+    c_search --> a_video
+    c_search --> a_user
+    c_user --> a_user
+    c_fav --> a_user
+
+    API_BIZ --> a_client
+    API_BIZ --> a_wbi
 ```
 
 ```
