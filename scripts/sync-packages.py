@@ -44,10 +44,9 @@ for platform, ext in [('windows', 'zip'), ('darwin', 'zip'), ('linux', 'tar.gz')
         if pkg_name not in hashes:
             raise ValueError(f'Missing {pkg_name} checksum')
 
-for formula_name, class_name in [('bili-tools', 'BiliTools'), ('bit', 'Bit'), ('bt', 'Bt')]:
-    brew = ROOT / f'pkg/homebrew/Formula/{formula_name}.rb'
-    brew.parent.mkdir(parents=True, exist_ok=True)
-    brew.write_text(f'''class {class_name} < Formula
+brew = ROOT / 'pkg/homebrew/Formula/bit.rb'
+brew.parent.mkdir(parents=True, exist_ok=True)
+brew.write_text(f'''class Bit < Formula
   desc "B站终端多功能工具箱 (Bilibili CLI toolbox)"
   homepage "https://github.com/qwerprog/bili-tools"
   version "{version}"

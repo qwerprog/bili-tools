@@ -15,7 +15,7 @@ B站终端多功能工具箱，提供开播下播、账号管理、视频检索�
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 克隆并编译安装
-git clone https://github.com/QwerProg/bili-tools.git --depth=1
+git clone https://github.com/qwerprog/bili-tools.git --depth=1
 cd bili-tools
 cargo install --path .
 ```
@@ -25,9 +25,7 @@ cargo install --path .
 ### macOS (Homebrew)
 
 ```bash
-brew install QwerProg/bili-tools
-# 或
-brew install QwerProg/bili-tools/bit
+brew install qwerprog/bili-tools/bit
 ```
 
 ### Arch Linux (AUR)
@@ -48,7 +46,7 @@ winget install QwerProg.bili-tools
 ```
 
 #### 手动下载
-从 [Releases](https://github.com/QwerProg/bili-tools/releases) 下载 `bit-v版本号-windows-amd64.zip`，解压后即可运行。
+从 [Releases](https://github.com/qwerprog/bili-tools/releases) 下载 `bit-v版本号-windows-amd64.zip`，解压后即可运行。
 
 ## 快速使用
 
