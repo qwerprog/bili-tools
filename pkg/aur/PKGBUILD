@@ -24,6 +24,7 @@ build() {
 
 package() {
   cd "$srcdir/bili-tools"
-  install -Dm755 target/release/bt "$pkgdir/usr/bin/bt"
+  install -Dm755 target/release/bit "$pkgdir/usr/bin/bit"
+  ln -sf bit "$pkgdir/usr/bin/bt"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

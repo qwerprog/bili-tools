@@ -2363,7 +2363,7 @@ fn t1_f14_05() {
             continue;
         }
         let code = trimmed.split('#').next().unwrap_or("").trim();
-        let Some(rest) = code.strip_prefix("bt ") else {
+        let Some(rest) = code.strip_prefix("bit ").or_else(|| code.strip_prefix("bt ")) else {
             continue;
         };
         let tokens: Vec<&str> = rest.split_whitespace().collect();

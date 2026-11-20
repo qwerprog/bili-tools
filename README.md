@@ -20,12 +20,14 @@ cd bili-tools
 cargo install --path .
 ```
 
-编译安装到 `~/.cargo/bin/bt`，确认该目录在 PATH 中即可。
+编译安装到 `~/.cargo/bin/bit`，确认该目录在 PATH 中即可。
 
 ### macOS (Homebrew)
 
 ```bash
-brew install QwerProg/bili-tools/bt
+brew install QwerProg/bili-tools
+# 或
+brew install QwerProg/bili-tools/bit
 ```
 
 ### Arch Linux (AUR)
@@ -213,7 +215,7 @@ bit auth login
 ✔ 选择一种登录方式 · 扫码登录（Web，推荐）
   ℹ 开始B站Web二维码登录流程...
 [终端弹出二维码]
-  ✔ 二维码已保存到 ~/.config/bt/qrcode.png
+  ✔ 二维码已保存到 ~/.config/bit/qrcode.png
   ℹ 等待用户处理...
 
 # 登录后 — 正常开播
@@ -226,7 +228,7 @@ bit live start
   ╭─ 🎬 直播已开启 · 房间 31686846 ──────────────────────────╮
   │ 推流地址   rtmp://live-push.bilivideo.com/live-bvc/     │
   │   推流码   ?strea************...g=13  (加 -s 查看完整码) │
-  │ 本地保存   ~/.config/bt/stream_info.txt                 │
+  │ 本地保存   ~/.config/bit/stream_info.txt                 │
   ╰───────────────────────────────────────────────────────╯
 
 # 查看直播间状态 — 粉蓝渐变小电视 Logo + 状态与统计卡片
@@ -407,7 +409,7 @@ strip = "symbols"
 
 ## 注意事项
 
-- `cookies.json` 包含敏感凭证（SESSDATA、bili_jct），存储在系统数据目录（macOS/Linux: `~/.config/bt/`，Windows: `%APPDATA%/bt/`），请勿泄露或提交到版本控制
+- `cookies.json` 包含敏感凭证（SESSDATA、bili_jct），存储在系统数据目录（macOS/Linux: `~/.config/bit/`，Windows: `%APPDATA%/bit/`），请勿泄露或提交到版本控制（初次使用会自动兼容迁移旧 `bt/` 目录凭证）
 - 推流信息写入 `stream_info.txt`（同数据目录），第一行 RTMP 地址，第二行完整推流码
 - 高频调用接口可能触发风控，请合理使用
 - 本项目仅供学习交流，禁止用于违反 B 站用户协议的行为
