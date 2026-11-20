@@ -110,6 +110,10 @@ jobs:
           for name in "bit-v${VERSION}-windows-amd64.zip" "bit-v${VERSION}-windows-arm64.zip" "bit-v${VERSION}-darwin-amd64.zip" "bit-v${VERSION}-darwin-arm64.zip" "bit-v${VERSION}-linux-amd64.tar.gz" "bit-v${VERSION}-linux-arm64.tar.gz"; do
             test -s "$name"
           done
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "../docs/releases/${GITHUB_REF_NAME}.md" --draft
-          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" bit-*
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file "../docs/releases/${GITHUB_REF_NAME}.md"
+          else
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "../docs/releases/${GITHUB_REF_NAME}.md" --draft
+          fi
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" bit-* --clobber
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
