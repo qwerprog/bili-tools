@@ -12,4 +12,4 @@ jobs:
         run: winget source update
 
       - name: Test Install
-        run: winget install QwerProg.bt --accept-source-agreements --accept-package-agreements
+        run: winget install QwerProg.bili-tools --accept-source-agreements --accept-package-agreements

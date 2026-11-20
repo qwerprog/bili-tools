@@ -84,7 +84,7 @@ for arch, file in [
 
 installer_manifest = f'''# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 
-PackageIdentifier: QwerProg.bt
+PackageIdentifier: QwerProg.bili-tools
 PackageVersion: {version}
 InstallerLocale: en-US
 InstallerType: zip
@@ -99,13 +99,13 @@ ManifestVersion: 1.12.0
 
 locale_manifest = f'''# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
-PackageIdentifier: QwerProg.bt
+PackageIdentifier: QwerProg.bili-tools
 PackageVersion: {version}
 PackageLocale: en-US
 Publisher: QwerProg
 PublisherUrl: https://github.com/qwerprog/bili-tools
 PublisherSupportUrl: https://github.com/qwerprog/bili-tools/issues
-PackageName: bt
+PackageName: bili-tools
 PackageUrl: https://github.com/qwerprog/bili-tools
 License: MIT
 LicenseUrl: https://github.com/qwerprog/bili-tools/blob/main/LICENSE
@@ -124,19 +124,20 @@ ManifestVersion: 1.12.0
 
 version_manifest = f'''# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
 
-PackageIdentifier: QwerProg.bt
+PackageIdentifier: QwerProg.bili-tools
 PackageVersion: {version}
 DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: 1.12.0
 '''
 
-(ROOT / 'pkg/winget/QwerProg.bt.installer.yaml').write_text(installer_manifest)
-winget_dir = ROOT / f'pkg/winget-pkgs/manifests/q/QwerProg/bt/{version}'
+(ROOT / 'pkg/winget').mkdir(parents=True, exist_ok=True)
+(ROOT / 'pkg/winget/QwerProg.bili-tools.installer.yaml').write_text(installer_manifest)
+winget_dir = ROOT / f'pkg/winget-pkgs/manifests/q/QwerProg/bili-tools/{version}'
 winget_dir.mkdir(parents=True, exist_ok=True)
-(winget_dir / 'QwerProg.bt.installer.yaml').write_text(installer_manifest)
-(winget_dir / 'QwerProg.bt.locale.en-US.yaml').write_text(locale_manifest)
-(winget_dir / 'QwerProg.bt.yaml').write_text(version_manifest)
+(winget_dir / 'QwerProg.bili-tools.installer.yaml').write_text(installer_manifest)
+(winget_dir / 'QwerProg.bili-tools.locale.en-US.yaml').write_text(locale_manifest)
+(winget_dir / 'QwerProg.bili-tools.yaml').write_text(version_manifest)
 
 aur = ROOT / 'pkg/aur-bin/PKGBUILD'
 aur.parent.mkdir(parents=True, exist_ok=True)

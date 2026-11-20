@@ -42,7 +42,7 @@ paru -S bili-tools-bin
 
 #### Winget
 ```bash
-winget install QwerProg.bt
+winget install QwerProg.bili-tools
 ```
 
 #### 手动下载
