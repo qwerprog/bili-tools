@@ -8,6 +8,20 @@ B站终端多功能工具箱，提供开播下播、账号管理、视频检索�
 
 ## 安装
 
+### 一键脚本安装 (推荐)
+
+运行以下单行命令，将自动检测操作系统与硬件架构，下载并安装最新版 `bit` 二进制文件：
+
+**Linux / macOS (Bash / Sh)**:
+```bash
+curl -fsSL https://raw.githubusercontent.com/qwerprog/bili-tools/main/install.sh | bash
+```
+
+**Windows (PowerShell)**:
+```powershell
+irm https://raw.githubusercontent.com/qwerprog/bili-tools/main/install.ps1 | iex
+```
+
 ### macOS (Homebrew)
 
 ```bash
