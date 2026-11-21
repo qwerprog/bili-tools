@@ -6,7 +6,9 @@ use std::sync::RwLock;
 static COOKIE_FILE_OVERRIDE: RwLock<Option<PathBuf>> = RwLock::new(None);
 
 pub fn set_cookie_file_override(path: Option<PathBuf>) {
-    let mut guard = COOKIE_FILE_OVERRIDE.write().unwrap_or_else(|e| e.into_inner());
+    let mut guard = COOKIE_FILE_OVERRIDE
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
     *guard = path;
 }
 

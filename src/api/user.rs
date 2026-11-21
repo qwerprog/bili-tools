@@ -227,10 +227,7 @@ pub fn modify_relation(cookies: &Cookies, fid: i64, follow: bool) -> Result<()> 
     ])
     .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
-    let url = format!(
-        "{}/x/relation/modify",
-        crate::api::client::api_base_url()
-    );
+    let url = format!("{}/x/relation/modify", crate::api::client::api_base_url());
     let referer = format!("https://space.bilibili.com/{fid}/");
     let resp = crate::api::client::post(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
@@ -260,11 +257,7 @@ pub fn modify_relation(cookies: &Cookies, fid: i64, follow: bool) -> Result<()> 
 }
 
 /// 获取已关注 UP 主的动态时间线 (`/x/polymer/web-dynamic/v1/feed/all`)
-pub fn get_feed(
-    cookies: &Cookies,
-    feed_type: &str,
-    offset: Option<&str>,
-) -> Result<Value> {
+pub fn get_feed(cookies: &Cookies, feed_type: &str, offset: Option<&str>) -> Result<Value> {
     let mut params: Vec<(&str, &str)> = vec![("type", feed_type)];
     if let Some(off) = offset.map(str::trim).filter(|s| !s.is_empty()) {
         params.push(("offset", off));

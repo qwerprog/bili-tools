@@ -127,7 +127,9 @@ fn now_millis() -> u128 {
 pub(crate) fn normalize_upos_endpoint(endpoint: &str, upos_uri: &str) -> Result<(String, String)> {
     let ep = endpoint.trim().trim_end_matches('/');
     if ep.is_empty() {
-        return Err(BiliLiveError::Parse("preupload 缺少 endpoint 字段".to_string()));
+        return Err(BiliLiveError::Parse(
+            "preupload 缺少 endpoint 字段".to_string(),
+        ));
     }
     let scheme_host = if ep.starts_with("http://") || ep.starts_with("https://") {
         ep.to_string()
@@ -143,7 +145,9 @@ pub(crate) fn normalize_upos_endpoint(endpoint: &str, upos_uri: &str) -> Result<
         .unwrap_or(raw_uri)
         .trim_start_matches('/');
     if path.is_empty() {
-        return Err(BiliLiveError::Parse("preupload 缺少有效的 upos_uri".to_string()));
+        return Err(BiliLiveError::Parse(
+            "preupload 缺少有效的 upos_uri".to_string(),
+        ));
     }
 
     let last_seg = path.rsplit('/').next().unwrap_or(path);
@@ -172,7 +176,10 @@ pub fn resolve_line_query(line: UploadLine) -> String {
         return q.to_string();
     }
 
-    let probe_api = format!("{}/preupload?r=probe", crate::api::client::member_api_base_url());
+    let probe_api = format!(
+        "{}/preupload?r=probe",
+        crate::api::client::member_api_base_url()
+    );
     let Ok(resp) = minreq::get(&probe_api)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_timeout(4)
@@ -283,7 +290,10 @@ pub fn upload_single_video_file(
     crate::utils::interrupt::check_interrupted()?;
 
     let meta = std::fs::metadata(file_path).map_err(|e| {
-        BiliLiveError::Input(format!("无法读取待上传视频文件 '{}': {e}", file_path.display()))
+        BiliLiveError::Input(format!(
+            "无法读取待上传视频文件 '{}': {e}",
+            file_path.display()
+        ))
     })?;
     if !meta.is_file() {
         return Err(BiliLiveError::Input(format!(
@@ -344,10 +354,7 @@ pub fn upload_single_video_file(
         .send()?;
     let pre_json: Value = crate::api::client::parse_json_response(&pre_resp, "预上传请求失败")?;
     if pre_json["OK"].as_i64() != Some(1) {
-        return Err(BiliLiveError::Api(format!(
-            "UPOS 预上传失败: {}",
-            pre_json
-        )));
+        return Err(BiliLiveError::Api(format!("UPOS 预上传失败: {}", pre_json)));
     }
 
     let auth = pre_json["auth"]
@@ -532,9 +539,10 @@ pub fn upload_single_video_file(
                         failed.store(true, Ordering::SeqCst);
                         let mut g = first_err.lock().unwrap_or_else(|p| p.into_inner());
                         if g.is_none() {
-                            *g = Some(attempt_err.unwrap_or_else(|| {
-                                BiliLiveError::Api("分块上传失败".to_string())
-                            }));
+                            *g =
+                                Some(attempt_err.unwrap_or_else(|| {
+                                    BiliLiveError::Api("分块上传失败".to_string())
+                                }));
                         }
                         break;
                     }
@@ -546,7 +554,8 @@ pub fn upload_single_video_file(
                         && (done >= total_size || last.elapsed() >= Duration::from_millis(80))
                     {
                         let secs = started.elapsed().as_secs_f64().max(0.001);
-                        let line = render_upload_progress(done, total_size, done as f64 / secs, use_ansi);
+                        let line =
+                            render_upload_progress(done, total_size, done as f64 / secs, use_ansi);
                         if use_ansi {
                             eprint!("\r\x1b[K{line}");
                         } else {
@@ -624,9 +633,8 @@ pub fn upload_cover_image(cookies: &Cookies, cover_arg: &str) -> Result<String> 
     }
 
     let path = Path::new(trimmed);
-    let meta = std::fs::metadata(path).map_err(|e| {
-        BiliLiveError::Input(format!("无法读取封面图片 '{}': {e}", path.display()))
-    })?;
+    let meta = std::fs::metadata(path)
+        .map_err(|e| BiliLiveError::Input(format!("无法读取封面图片 '{}': {e}", path.display())))?;
     if !meta.is_file() || meta.len() == 0 {
         return Err(BiliLiveError::Input(format!(
             "封面图片无效或为空文件: {}",
@@ -648,7 +656,10 @@ pub fn upload_cover_image(cookies: &Cookies, cover_arg: &str) -> Result<String> 
     } else {
         "image/jpeg"
     };
-    let data_uri = format!("data:{mime};base64,{}", general_purpose::STANDARD.encode(&bytes));
+    let data_uri = format!(
+        "data:{mime};base64,{}",
+        general_purpose::STANDARD.encode(&bytes)
+    );
     let form = serde_urlencoded::to_string([
         ("csrf", cookies.bili_jct.as_str()),
         ("cover", data_uri.as_str()),
@@ -689,7 +700,9 @@ pub fn normalize_tags(raw: &str) -> Result<String> {
         .filter(|s| !s.is_empty())
         .collect();
     if tags.is_empty() {
-        return Err(BiliLiveError::Input("至少需要提供 1 个非空视频标签 (--tag)".to_string()));
+        return Err(BiliLiveError::Input(
+            "至少需要提供 1 个非空视频标签 (--tag)".to_string(),
+        ));
     }
     if tags.len() > 10 {
         return Err(BiliLiveError::Input(format!(
@@ -790,7 +803,9 @@ pub fn get_studio_archive_view(cookies: &Cookies, video_input: &str) -> Result<V
         serde_urlencoded::to_string([("aid", aid.to_string())])
             .map_err(|e| BiliLiveError::Parse(e.to_string()))?
     } else {
-        return Err(BiliLiveError::Input(format!("无效的稿件标识: {video_input}")));
+        return Err(BiliLiveError::Input(format!(
+            "无效的稿件标识: {video_input}"
+        )));
     };
 
     let url = format!(
@@ -813,24 +828,9 @@ pub fn get_studio_archive_view(cookies: &Cookies, video_input: &str) -> Result<V
     Ok(json["data"].clone())
 }
 
-/// 向已有稿件追加新视频分P并提交编辑 (`POST /x/vu/web/edit`，对标 `biliup append`)
-pub fn append_archive_parts(
-    cookies: &Cookies,
-    video_input: &str,
-    new_parts: &[UploadedVideoPart],
-) -> Result<(Value, usize)> {
-    if new_parts.is_empty() {
-        return Err(BiliLiveError::Input("待追加的视频分P列表不能为空".to_string()));
-    }
-
-    let view = get_studio_archive_view(cookies, video_input)?;
-    let arc = &view["archive"];
-    let aid = arc["aid"]
-        .as_i64()
-        .filter(|&a| a > 0)
-        .ok_or_else(|| BiliLiveError::Parse("原稿件详情缺少有效 aid".to_string()))?;
-
-    let mut merged_videos: Vec<Value> = view["videos"]
+/// 读取创作中心稿件详情中的现有分P，转换为 `/x/vu/web/edit` 所需的 videos 结构
+fn existing_video_entries(view: &Value) -> Vec<Value> {
+    view["videos"]
         .as_array()
         .map(|arr| {
             arr.iter()
@@ -844,22 +844,28 @@ pub fn append_archive_parts(
                 })
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
 
-    for p in new_parts {
-        merged_videos.push(json!({
-            "filename": p.filename,
-            "title": p.title,
-            "desc": p.desc,
-            "cid": p.cid,
-        }));
-    }
-    let total_parts = merged_videos.len();
+fn archive_aid(arc: &Value) -> Result<i64> {
+    arc["aid"]
+        .as_i64()
+        .filter(|&a| a > 0)
+        .ok_or_else(|| BiliLiveError::Parse("原稿件详情缺少有效 aid".to_string()))
+}
 
-    let payload = json!({
+/// 基于原稿件元数据构造编辑载荷；`title_override` 为 `Some` 时同时修改稿件标题
+fn build_edit_payload(
+    cookies: &Cookies,
+    arc: &Value,
+    aid: i64,
+    videos: Vec<Value>,
+    title_override: Option<&str>,
+) -> Value {
+    json!({
         "aid": aid,
-        "videos": merged_videos,
-        "title": arc["title"].as_str().unwrap_or(""),
+        "videos": videos,
+        "title": title_override.unwrap_or_else(|| arc["title"].as_str().unwrap_or("")),
         "cover": arc["cover"].as_str().unwrap_or(""),
         "cover43": arc["cover43"].as_str().unwrap_or(""),
         "copyright": arc["copyright"].as_u64().unwrap_or(1),
@@ -880,9 +886,12 @@ pub fn append_archive_parts(
         },
         "web_os": 1,
         "csrf": cookies.bili_jct,
-    });
+    })
+}
 
-    let body = serde_json::to_string(&payload)?;
+/// 提交稿件编辑 (`POST /x/vu/web/edit`)
+fn submit_archive_edit(cookies: &Cookies, payload: &Value, context: &str) -> Result<Value> {
+    let body = serde_json::to_string(payload)?;
     let url = format!(
         "{}/x/vu/web/edit?t={}&csrf={}",
         crate::api::client::member_api_base_url(),
@@ -896,15 +905,131 @@ pub fn append_archive_parts(
         .with_header("Cookie", cookies.cookie_header())
         .with_body(body)
         .send()?;
-    let json: Value = crate::api::client::parse_json_response(&resp, "追加稿件分P失败")?;
+    let json: Value = crate::api::client::parse_json_response(&resp, context)?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
-            "追加稿件分P失败 ({}): {}",
+            "{} ({}): {}",
+            context,
             json["code"].as_i64().unwrap_or(-1),
             json["message"].as_str().unwrap_or("未知错误")
         )));
     }
-    Ok((json["data"].clone(), total_parts))
+    Ok(json["data"].clone())
+}
+
+/// 向已有稿件追加新视频分P并提交编辑 (`POST /x/vu/web/edit`，对标 `biliup append`)
+pub fn append_archive_parts(
+    cookies: &Cookies,
+    video_input: &str,
+    new_parts: &[UploadedVideoPart],
+) -> Result<(Value, usize)> {
+    if new_parts.is_empty() {
+        return Err(BiliLiveError::Input(
+            "待追加的视频分P列表不能为空".to_string(),
+        ));
+    }
+
+    let view = get_studio_archive_view(cookies, video_input)?;
+    let arc = &view["archive"];
+    let aid = archive_aid(arc)?;
+
+    let mut merged_videos = existing_video_entries(&view);
+    for p in new_parts {
+        merged_videos.push(json!({
+            "filename": p.filename,
+            "title": p.title,
+            "desc": p.desc,
+            "cid": p.cid,
+        }));
+    }
+    let total_parts = merged_videos.len();
+
+    let payload = build_edit_payload(cookies, arc, aid, merged_videos, None);
+    let data = submit_archive_edit(cookies, &payload, "追加稿件分P失败")?;
+    Ok((data, total_parts))
+}
+
+/// 校验稿件详情中的 `replace_check`，确认当前允许替换视频文件
+pub fn ensure_replace_allowed(view: &Value) -> Result<()> {
+    let check = &view["replace_check"];
+    if check["can_replace"].as_bool() == Some(false) {
+        let msg = check["message"]
+            .as_str()
+            .filter(|m| !m.is_empty())
+            .unwrap_or("稿件当前状态不允许替换视频");
+        return Err(BiliLiveError::Input(format!("无法替换视频: {msg}")));
+    }
+    Ok(())
+}
+
+/// 稿件标题校验：去除首尾空白后非空且不超过 80 字
+pub fn validate_archive_title(title: &str) -> Result<String> {
+    let t = title.trim();
+    if t.is_empty() || t.chars().count() > 80 {
+        return Err(BiliLiveError::Input(
+            "稿件标题不能为空且最长 80 字".to_string(),
+        ));
+    }
+    Ok(t.to_string())
+}
+
+/// 替换分P的结果
+#[derive(Debug, Clone, Serialize)]
+pub struct ReplaceOutcome {
+    pub data: Value,
+    pub part: usize,
+    pub total_parts: usize,
+    pub old_filename: String,
+    pub part_title: String,
+    pub title: String,
+}
+
+/// 用新上传的视频文件替换稿件中第 `part`（从 1 开始）个分P，保留 BV 号、分P 标题与稿件其余元数据；
+/// `new_title` 为 `Some` 时同时修改稿件标题。提交后稿件将重新进入审核。
+pub fn replace_archive_part(
+    cookies: &Cookies,
+    video_input: &str,
+    part: usize,
+    new_part: &UploadedVideoPart,
+    new_title: Option<&str>,
+) -> Result<ReplaceOutcome> {
+    let view = get_studio_archive_view(cookies, video_input)?;
+    ensure_replace_allowed(&view)?;
+    let arc = &view["archive"];
+    let aid = archive_aid(arc)?;
+
+    let mut videos = existing_video_entries(&view);
+    let total_parts = videos.len();
+    if part == 0 || part > total_parts {
+        return Err(BiliLiveError::Input(format!(
+            "分P序号 {part} 超出范围（稿件共 {total_parts} P）"
+        )));
+    }
+    let slot = &mut videos[part - 1];
+    let old_filename = slot["filename"].as_str().unwrap_or("").to_string();
+    let part_title = slot["title"].as_str().unwrap_or("").to_string();
+    let part_desc = slot["desc"].as_str().unwrap_or("").to_string();
+    *slot = json!({
+        "filename": new_part.filename,
+        "title": part_title,
+        "desc": part_desc,
+        "cid": new_part.cid,
+    });
+
+    let title = match new_title {
+        Some(t) => validate_archive_title(t)?,
+        None => arc["title"].as_str().unwrap_or("").to_string(),
+    };
+    let payload = build_edit_payload(cookies, arc, aid, videos, Some(&title));
+    let data = submit_archive_edit(cookies, &payload, "替换稿件视频失败")?;
+    Ok(ReplaceOutcome {
+        data,
+        part,
+        total_parts,
+        old_filename,
+        part_title,
+        title,
+    })
 }
 
 /// 查询创作中心后台稿件列表 (`GET /x/web/archives`，对标 `biliup list`)
@@ -965,18 +1090,19 @@ mod tests {
         );
         assert_eq!(fname, "n240728ad33h52yqhxbtw51cb06sq9gx");
 
-        let (local_url, fname2) = normalize_upos_endpoint(
-            "http://127.0.0.1:9999/",
-            "upos://ugcfx/mock_part_01.flv",
-        )
-        .unwrap();
+        let (local_url, fname2) =
+            normalize_upos_endpoint("http://127.0.0.1:9999/", "upos://ugcfx/mock_part_01.flv")
+                .unwrap();
         assert_eq!(local_url, "http://127.0.0.1:9999/ugcfx/mock_part_01.flv");
         assert_eq!(fname2, "mock_part_01");
     }
 
     #[test]
     fn normalize_tags_trims_splits_chinese_commas_and_enforces_ten_limit() {
-        assert_eq!(normalize_tags(" Rust , 直播 ，编程 ").unwrap(), "Rust,直播,编程");
+        assert_eq!(
+            normalize_tags(" Rust , 直播 ，编程 ").unwrap(),
+            "Rust,直播,编程"
+        );
         assert!(normalize_tags(" , ， ").is_err());
         assert!(normalize_tags("1,2,3,4,5,6,7,8,9,10,11").is_err());
     }

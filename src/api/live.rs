@@ -65,7 +65,10 @@ pub fn get_recent_live() -> Result<(String, String)> {
 
 pub fn update_title(cookies: &Cookies, title: &str) -> Result<()> {
     let form = title_form(cookies, title)?;
-    let url = format!("{}/room/v1/Room/update", crate::api::client::live_api_base_url());
+    let url = format!(
+        "{}/room/v1/Room/update",
+        crate::api::client::live_api_base_url()
+    );
     let json: serde_json::Value = if crate::cli::output::is_direct() {
         let ck = cookies.cookie_header();
         crate::utils::direct::send_direct_json(
@@ -312,7 +315,10 @@ pub fn extract_live_streams(play_info: &serde_json::Value) -> Vec<LiveStreamEntr
                             format!("{host}{base_url}")
                         } else if base_url.contains('?') {
                             let clean_extra = extra.strip_prefix('?').unwrap_or(extra);
-                            if base_url.ends_with('?') || base_url.ends_with('&') || clean_extra.starts_with('&') {
+                            if base_url.ends_with('?')
+                                || base_url.ends_with('&')
+                                || clean_extra.starts_with('&')
+                            {
                                 format!("{host}{base_url}{clean_extra}")
                             } else {
                                 format!("{host}{base_url}&{clean_extra}")
@@ -377,12 +383,7 @@ pub fn get_live_danmaku_history(room_id: i64) -> Result<serde_json::Value> {
     Ok(data)
 }
 
-fn live_danmaku_form(
-    cookies: &Cookies,
-    room_id: i64,
-    msg: &str,
-    rnd: u64,
-) -> Result<String> {
+fn live_danmaku_form(cookies: &Cookies, room_id: i64, msg: &str, rnd: u64) -> Result<String> {
     serde_urlencoded::to_string([
         ("bubble", "0".to_string()),
         ("msg", msg.to_string()),
@@ -397,11 +398,7 @@ fn live_danmaku_form(
     .map_err(|e| BiliLiveError::Parse(format!("表单编码失败: {e}")))
 }
 
-pub fn send_live_danmaku(
-    cookies: &Cookies,
-    room_id: i64,
-    msg: &str,
-) -> Result<serde_json::Value> {
+pub fn send_live_danmaku(cookies: &Cookies, room_id: i64, msg: &str) -> Result<serde_json::Value> {
     let wbi_query =
         crate::api::wbi::sign_params(&[("web_location", "444.8")], Some(&cookies.sessdata)).ok();
     let base = format!("{}/msg/send", crate::api::client::live_api_base_url());
@@ -639,7 +636,10 @@ mod tests {
         assert_eq!(streams[0].codec, "avc");
         assert_eq!(streams[0].current_qn, 400);
         assert_eq!(streams[0].quality_desc, "蓝光");
-        assert_eq!(streams[0].url, "https://cdn1.example.com/live/14073662.flv?token=abc");
+        assert_eq!(
+            streams[0].url,
+            "https://cdn1.example.com/live/14073662.flv?token=abc"
+        );
         assert_eq!(
             streams[0].backup_urls,
             vec!["https://cdn2.example.com/live/14073662.flv?token=def".to_string()]

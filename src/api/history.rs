@@ -66,10 +66,7 @@ pub fn get_history(
 
 /// 获取稍后再看列表
 pub fn get_toview_list(cookies: &Cookies) -> Result<serde_json::Value> {
-    let url = format!(
-        "{}/x/v2/history/toview",
-        crate::api::client::api_base_url()
-    );
+    let url = format!("{}/x/v2/history/toview", crate::api::client::api_base_url());
     let resp = crate::api::client::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Referer", "https://www.bilibili.com/")
@@ -105,8 +102,8 @@ pub fn add_toview(cookies: &Cookies, id: &str) -> Result<()> {
         _ => return Err(BiliLiveError::Input(format!("无效的视频ID: {id}"))),
     }
 
-    let body = serde_urlencoded::to_string(&params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let body =
+        serde_urlencoded::to_string(&params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
     let url = format!(
         "{}/x/v2/history/toview/add",
@@ -135,11 +132,9 @@ pub fn add_toview(cookies: &Cookies, id: &str) -> Result<()> {
 /// 从稍后再看列表移除指定视频 (`/x/v2/history/toview/del`)
 pub fn remove_toview(cookies: &Cookies, id: &str) -> Result<i64> {
     let aid = crate::api::video::resolve_video_aid(id, Some(cookies))?;
-    let body = serde_urlencoded::to_string([
-        ("aid", aid.to_string()),
-        ("csrf", cookies.bili_jct.clone()),
-    ])
-    .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let body =
+        serde_urlencoded::to_string([("aid", aid.to_string()), ("csrf", cookies.bili_jct.clone())])
+            .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
     let url = format!(
         "{}/x/v2/history/toview/del",
@@ -169,11 +164,9 @@ pub fn remove_toview(cookies: &Cookies, id: &str) -> Result<i64> {
 pub fn clear_toview(cookies: &Cookies, viewed_only: bool) -> Result<()> {
     let api_base = crate::api::client::api_base_url();
     if viewed_only {
-        let body = serde_urlencoded::to_string([
-            ("viewed", "true"),
-            ("csrf", cookies.bili_jct.as_str()),
-        ])
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+        let body =
+            serde_urlencoded::to_string([("viewed", "true"), ("csrf", cookies.bili_jct.as_str())])
+                .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
         let url = format!("{api_base}/x/v2/history/toview/del");
         let resp = crate::api::client::post(&url)
             .with_header("User-Agent", DEFAULT_USER_AGENT)
@@ -332,10 +325,7 @@ pub fn delete_history_item(cookies: &Cookies, id: &str) -> Result<DeletedHistory
     ])
     .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
-    let url = format!(
-        "{}/x/v2/history/delete",
-        crate::api::client::api_base_url()
-    );
+    let url = format!("{}/x/v2/history/delete", crate::api::client::api_base_url());
     let resp = crate::api::client::post(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/x-www-form-urlencoded")
@@ -367,10 +357,7 @@ pub fn clear_history(cookies: &Cookies) -> Result<()> {
     let body = serde_urlencoded::to_string([("csrf", cookies.bili_jct.as_str())])
         .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
-    let url = format!(
-        "{}/x/v2/history/clear",
-        crate::api::client::api_base_url()
-    );
+    let url = format!("{}/x/v2/history/clear", crate::api::client::api_base_url());
     let resp = crate::api::client::post(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/x-www-form-urlencoded")
@@ -462,7 +449,10 @@ mod tests {
                 if content_len > 0 {
                     reader.read_exact(&mut buf).unwrap();
                 }
-                captured.push((first.trim().to_string(), String::from_utf8_lossy(&buf).to_string()));
+                captured.push((
+                    first.trim().to_string(),
+                    String::from_utf8_lossy(&buf).to_string(),
+                ));
                 write!(
                     stream,
                     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -505,13 +495,15 @@ mod tests {
         assert!(rem_form.contains(&("aid".into(), "111".into())));
 
         assert!(captured[4].0.starts_with("POST /x/v2/history/toview/del"));
-        let viewed_form: Vec<(String, String)> = serde_urlencoded::from_str(&captured[4].1).unwrap();
+        let viewed_form: Vec<(String, String)> =
+            serde_urlencoded::from_str(&captured[4].1).unwrap();
         assert!(viewed_form.contains(&("viewed".into(), "true".into())));
 
         assert!(captured[5].0.starts_with("POST /x/v2/history/toview/clear"));
 
         assert!(captured[8].0.starts_with("POST /x/v2/history/delete"));
-        let del_hist_form: Vec<(String, String)> = serde_urlencoded::from_str(&captured[8].1).unwrap();
+        let del_hist_form: Vec<(String, String)> =
+            serde_urlencoded::from_str(&captured[8].1).unwrap();
         assert!(del_hist_form.contains(&("kid".into(), "archive_79677524".into())));
 
         assert!(captured[9].0.starts_with("POST /x/v2/history/clear"));
@@ -520,7 +512,8 @@ mod tests {
         assert_eq!(live_item.kid, "live_76");
         let cv_item = resolve_history_kid("cv12345", None).unwrap();
         assert_eq!(cv_item.kid, "article_12345");
-        let url_cv = resolve_history_kid("https://www.bilibili.com/read/cv9988?spm=1", None).unwrap();
+        let url_cv =
+            resolve_history_kid("https://www.bilibili.com/read/cv9988?spm=1", None).unwrap();
         assert_eq!(url_cv.kid, "article_9988");
         assert!(resolve_history_kid("invalid_id", None).is_err());
     }

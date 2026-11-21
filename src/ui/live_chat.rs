@@ -1,9 +1,7 @@
 use crate::auth::cookies::Cookies;
 use crate::cli::output::{is_json, is_quiet};
 use crate::error::{BiliLiveError, Result};
-use crate::live::ws::{
-    InteractKind, LiveEvent, now_hhmmss, spawn_live_ws_listener,
-};
+use crate::live::ws::{InteractKind, LiveEvent, now_hhmmss, spawn_live_ws_listener};
 use crate::ui::components::wrap_to_width;
 use crate::ui::theme::{BILI_CYAN, BILI_PINK, color_enabled};
 use crate::utils::string::{display_width, pad_to_width, truncate_to_width};
@@ -13,7 +11,7 @@ use crossterm::style::{Color, Stylize};
 use crossterm::terminal::{
     Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use crossterm::{ execute, queue };
+use crossterm::{execute, queue};
 use std::collections::VecDeque;
 use std::io::{IsTerminal, Write};
 use std::sync::Arc;
@@ -1066,8 +1064,9 @@ fn render_tui_frame(state: RenderState<'_>) -> Result<()> {
         } else {
             live_badge.dark_grey().to_string()
         };
-        let rest_budget = cols
-            .saturating_sub(display_width(&format!(" 📺 #{} {} · ", state.room_id, live_badge)) + 1);
+        let rest_budget = cols.saturating_sub(
+            display_width(&format!(" 📺 #{} {} · ", state.room_id, live_badge)) + 1,
+        );
         let title_and_meta = truncate_to_width(
             &format!("{}{}{}", state.room_title, area_part, anchor_part),
             rest_budget,
@@ -1132,7 +1131,11 @@ fn render_tui_frame(state: RenderState<'_>) -> Result<()> {
         *state.scroll_offset = max_scroll;
     }
 
-    let reserve_banner = if *state.scroll_offset > 0 { 1usize } else { 0usize };
+    let reserve_banner = if *state.scroll_offset > 0 {
+        1usize
+    } else {
+        0usize
+    };
     let visible_slots = chat_height.saturating_sub(reserve_banner);
     let end_idx = visual_lines.len().saturating_sub(*state.scroll_offset);
     let start_idx = end_idx.saturating_sub(visible_slots);
@@ -1200,7 +1203,9 @@ fn render_tui_frame(state: RenderState<'_>) -> Result<()> {
 
     // 计算输入框水平滚动窗口，确保光标始终在可见范围内
     let prompt_str = "❯ ";
-    let text_slots = box_inner.saturating_sub(display_width(prompt_str) + 2).max(8);
+    let text_slots = box_inner
+        .saturating_sub(display_width(prompt_str) + 2)
+        .max(8);
     let (visible_input, cursor_col_offset) =
         slice_input_window(state.input_chars, state.cursor_idx, text_slots);
 
@@ -1309,11 +1314,7 @@ fn slice_input_window(chars: &[char], cursor_idx: usize, max_cols: usize) -> (St
     (out, cursor_col)
 }
 
-fn build_plain_badge(
-    guard_level: u8,
-    is_admin: bool,
-    medal: Option<&(String, u32)>,
-) -> String {
+fn build_plain_badge(guard_level: u8, is_admin: bool, medal: Option<&(String, u32)>) -> String {
     let mut parts = Vec::new();
     if is_admin {
         parts.push("[房]".to_string());

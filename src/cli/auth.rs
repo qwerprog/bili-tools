@@ -260,18 +260,33 @@ pub fn handle_auth(cmd: AuthCommands) -> Result<()> {
                 )
                 .add_plain_row(
                     "每日登录",
-                    if exp.login { "✔ 已完成 (+5)" } else { "○ 未完成" },
+                    if exp.login {
+                        "✔ 已完成 (+5)"
+                    } else {
+                        "○ 未完成"
+                    },
                 )
                 .add_plain_row(
                     "每日观看",
-                    if exp.watch { "✔ 已完成 (+5)" } else { "○ 未完成" },
+                    if exp.watch {
+                        "✔ 已完成 (+5)"
+                    } else {
+                        "○ 未完成"
+                    },
                 )
                 .add_plain_row("每日投币", format!("{}/50 经验", exp.coins))
                 .add_plain_row(
                     "每日分享",
-                    if exp.share { "✔ 已完成 (+5)" } else { "○ 未完成" },
+                    if exp.share {
+                        "✔ 已完成 (+5)"
+                    } else {
+                        "○ 未完成"
+                    },
                 )
-                .add_row("账号任务", crate::ui::components::Cell::muted(account_tasks))
+                .add_row(
+                    "账号任务",
+                    crate::ui::components::Cell::muted(account_tasks),
+                )
                 .add_row("直播签到", live_sign_cell);
 
             if let (Some(had), Some(all)) = (sign.had_sign_days, sign.all_days) {

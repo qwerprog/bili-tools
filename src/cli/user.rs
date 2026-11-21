@@ -293,7 +293,11 @@ pub fn handle_user(cmd: UserCommands) -> Result<()> {
                 let live_status = lr.get("liveStatus").and_then(|v| v.as_i64()).unwrap_or(0);
                 let live_title = lr.get("title").and_then(|v| v.as_str()).unwrap_or("");
                 if room_id > 0 {
-                    let state = if live_status == 1 { "直播中" } else { "未开播" };
+                    let state = if live_status == 1 {
+                        "直播中"
+                    } else {
+                        "未开播"
+                    };
                     if live_title.is_empty() {
                         format!("房间 {room_id} ({state})")
                     } else {

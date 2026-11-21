@@ -239,8 +239,8 @@ pub fn post_comment(
         params.push(("parent", p.to_string()));
     }
 
-    let body = serde_urlencoded::to_string(&params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let body =
+        serde_urlencoded::to_string(&params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
     let referer = format!("https://www.bilibili.com/video/av{aid}");
     let url = format!("{}/x/v2/reply/add", crate::api::client::api_base_url());
@@ -285,8 +285,8 @@ pub fn like_comment(cookies: &Cookies, aid: i64, rpid: i64, cancel: bool) -> Res
         ("csrf", cookies.bili_jct.as_str()),
     ];
 
-    let body = serde_urlencoded::to_string(params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let body =
+        serde_urlencoded::to_string(params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
     let referer = format!("https://www.bilibili.com/video/av{aid}");
     let url = format!("{}/x/v2/reply/action", crate::api::client::api_base_url());
@@ -329,8 +329,8 @@ pub fn delete_comment(cookies: &Cookies, aid: i64, rpid: i64) -> Result<()> {
         ("csrf", cookies.bili_jct.as_str()),
     ];
 
-    let body = serde_urlencoded::to_string(params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let body =
+        serde_urlencoded::to_string(params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
     let referer = format!("https://www.bilibili.com/video/av{aid}");
     let url = format!("{}/x/v2/reply/del", crate::api::client::api_base_url());
@@ -478,7 +478,11 @@ mod tests {
 
                 let resp = match idx {
                     0 => {
-                        assert!(first.starts_with("GET /x/v2/reply?type=1&oid=79677524&pn=2&ps=20&sort=2"));
+                        assert!(
+                            first.starts_with(
+                                "GET /x/v2/reply?type=1&oid=79677524&pn=2&ps=20&sort=2"
+                            )
+                        );
                         r#"{"code":0,"data":{"page":{"num":2,"size":20,"count":0,"acount":0},"replies":null,"hots":null}}"#
                     }
                     1 => {

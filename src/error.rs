@@ -86,10 +86,16 @@ mod tests {
         let ureq_err = ureq::Error::Timeout(ureq::Timeout::Global);
 
         assert_eq!(BiliLiveError::Network(minreq_err).error_kind(), "Network");
-        assert_eq!(BiliLiveError::WebNetwork(ureq_err).error_kind(), "WebNetwork");
+        assert_eq!(
+            BiliLiveError::WebNetwork(ureq_err).error_kind(),
+            "WebNetwork"
+        );
         assert_eq!(BiliLiveError::Json(json_err).error_kind(), "Json");
         assert_eq!(BiliLiveError::Io(io_err).error_kind(), "Io");
-        assert_eq!(BiliLiveError::ParseInt(parse_int_err).error_kind(), "ParseInt");
+        assert_eq!(
+            BiliLiveError::ParseInt(parse_int_err).error_kind(),
+            "ParseInt"
+        );
         assert_eq!(BiliLiveError::QrCode(qr_err).error_kind(), "QrCode");
         assert_eq!(BiliLiveError::Image(img_err).error_kind(), "Image");
         assert_eq!(BiliLiveError::Api("api".into()).error_kind(), "Api");

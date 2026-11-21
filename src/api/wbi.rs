@@ -4,10 +4,9 @@ use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const MIXIN_KEY_ENC_TAB: [usize; 64] = [
-    46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
-    33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
-    61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11,
-    36, 20, 34, 44, 52,
+    46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29,
+    28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25,
+    54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
 ];
 
 struct CachedKeys {
@@ -196,11 +195,7 @@ mod tests {
 
     #[test]
     fn test_encode_wbi_official_vector() {
-        let params = [
-            ("foo", "114"),
-            ("bar", "514"),
-            ("zab", "1919810"),
-        ];
+        let params = [("foo", "114"), ("bar", "514"), ("zab", "1919810")];
         let img_key = "7cd084941338484aae1ad9425b84077c";
         let sub_key = "4932caff0ff746eab6f01bf08b70ac45";
         let timestamp = 1702204169;
@@ -214,11 +209,7 @@ mod tests {
 
     #[test]
     fn test_encode_wbi_special_chars_and_chinese() {
-        let params = [
-            ("foo", "114"),
-            ("bar", "514"),
-            ("hello", "世 界!*()"),
-        ];
+        let params = [("foo", "114"), ("bar", "514"), ("hello", "世 界!*()")];
         let img_key = "7cd084941338484aae1ad9425b84077c";
         let sub_key = "4932caff0ff746eab6f01bf08b70ac45";
         let timestamp = 1744823207;
@@ -273,7 +264,10 @@ mod tests {
         }
         let _restore = RestoreApiEnv(std::env::var("BT_API_BASE_URL").ok());
 
-        fn spawn_nav_server(img_name: &str, sub_name: &str) -> (String, std::thread::JoinHandle<()>) {
+        fn spawn_nav_server(
+            img_name: &str,
+            sub_name: &str,
+        ) -> (String, std::thread::JoinHandle<()>) {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let base = format!("http://{}", listener.local_addr().unwrap());
             let img = img_name.to_string();
@@ -305,12 +299,18 @@ mod tests {
         unsafe { std::env::set_var("BT_API_BASE_URL", &base1) };
         let k1 = get_wbi_keys(None).unwrap();
         h1.join().unwrap();
-        assert_eq!(k1, ("img_server_one".to_string(), "sub_server_one".to_string()));
+        assert_eq!(
+            k1,
+            ("img_server_one".to_string(), "sub_server_one".to_string())
+        );
 
         let (base2, h2) = spawn_nav_server("img_server_two", "sub_server_two");
         unsafe { std::env::set_var("BT_API_BASE_URL", &base2) };
         let k2 = get_wbi_keys(None).unwrap();
         h2.join().unwrap();
-        assert_eq!(k2, ("img_server_two".to_string(), "sub_server_two".to_string()));
+        assert_eq!(
+            k2,
+            ("img_server_two".to_string(), "sub_server_two".to_string())
+        );
     }
 }

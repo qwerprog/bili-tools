@@ -339,9 +339,7 @@ fn parse_bilibili_url(orig_input: &str, url: &Url) -> Result<ResolvedInput> {
                 let mut r = ResolvedInput::base(orig_input, IdKind::Video, id.clone());
                 r.aid = Some(aid);
                 r.page = page;
-                r.resolved_url = Some(format!(
-                    "https://www.bilibili.com/video/{id}{page_suffix}"
-                ));
+                r.resolved_url = Some(format!("https://www.bilibili.com/video/{id}{page_suffix}"));
                 return Ok(r);
             }
         }
@@ -358,16 +356,14 @@ fn parse_bilibili_url(orig_input: &str, url: &Url) -> Result<ResolvedInput> {
                     let id = format!("ep{ep}");
                     let mut r = ResolvedInput::base(orig_input, IdKind::BangumiEpisode, id.clone());
                     r.episode_id = Some(ep);
-                    r.resolved_url =
-                        Some(format!("https://www.bilibili.com/bangumi/play/{id}"));
+                    r.resolved_url = Some(format!("https://www.bilibili.com/bangumi/play/{id}"));
                     return Ok(r);
                 }
                 if let Some(ss) = parse_prefixed_i64(seg, "ss") {
                     let id = format!("ss{ss}");
                     let mut r = ResolvedInput::base(orig_input, IdKind::BangumiSeason, id.clone());
                     r.season_id = Some(ss);
-                    r.resolved_url =
-                        Some(format!("https://www.bilibili.com/bangumi/play/{id}"));
+                    r.resolved_url = Some(format!("https://www.bilibili.com/bangumi/play/{id}"));
                     return Ok(r);
                 }
             }
@@ -376,8 +372,7 @@ fn parse_bilibili_url(orig_input: &str, url: &Url) -> Result<ResolvedInput> {
                     let id = format!("md{md}");
                     let mut r = ResolvedInput::base(orig_input, IdKind::BangumiMedia, id.clone());
                     r.media_id = Some(md);
-                    r.resolved_url =
-                        Some(format!("https://www.bilibili.com/bangumi/media/{id}"));
+                    r.resolved_url = Some(format!("https://www.bilibili.com/bangumi/media/{id}"));
                     return Ok(r);
                 }
             }
@@ -462,10 +457,7 @@ fn expand_short_link(orig_input: &str, url: &Url, short_base: &Url) -> Result<Re
                 .map_err(|e| BiliLiveError::Parse(format!("短链接目标 URL 解析失败: {e}")))?;
 
             if is_short_link(&next_url, short_base) {
-                current = if next_url
-                    .host_str()
-                    .is_some_and(is_standard_short_host)
-                {
+                current = if next_url.host_str().is_some_and(is_standard_short_host) {
                     rewrite_onto_base(&next_url, short_base)?
                 } else {
                     next_url
@@ -529,7 +521,9 @@ pub(crate) fn parse_input_with_short_base(
     if is_short_link(&url, &short_base) {
         let (code, short_url) = canonical_short_url(&url);
         if code.is_empty() {
-            return Err(BiliLiveError::Input(format!("短链接缺少路径代码: {trimmed}")));
+            return Err(BiliLiveError::Input(format!(
+                "短链接缺少路径代码: {trimmed}"
+            )));
         }
         if no_network {
             let mut r = ResolvedInput::base(trimmed, IdKind::ShortLink, code);
@@ -717,13 +711,15 @@ mod tests {
             .unwrap();
         });
 
-        let expanded =
-            parse_input_with_short_base("https://b23.tv/pigt3PQ", false, &base).unwrap();
+        let expanded = parse_input_with_short_base("https://b23.tv/pigt3PQ", false, &base).unwrap();
         handle.join().unwrap();
         assert_eq!(expanded.kind, IdKind::Video);
         assert_eq!(expanded.bvid.as_deref(), Some("BV1GJ411x7h7"));
         assert_eq!(expanded.page, Some(3));
-        assert_eq!(expanded.short_url.as_deref(), Some("https://b23.tv/pigt3PQ"));
+        assert_eq!(
+            expanded.short_url.as_deref(),
+            Some("https://b23.tv/pigt3PQ")
+        );
         assert!(expanded.network_used);
     }
 

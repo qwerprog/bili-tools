@@ -218,10 +218,7 @@ pub fn create_fav_folder(
     ])
     .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
-    let url = format!(
-        "{}/x/v3/fav/folder/add",
-        crate::api::client::api_base_url()
-    );
+    let url = format!("{}/x/v3/fav/folder/add", crate::api::client::api_base_url());
     let resp = crate::api::client::post(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/x-www-form-urlencoded")
@@ -230,8 +227,7 @@ pub fn create_fav_folder(
         .with_body(body)
         .send()?;
 
-    let json: serde_json::Value =
-        crate::api::client::parse_json_response(&resp, "创建收藏夹失败")?;
+    let json: serde_json::Value = crate::api::client::parse_json_response(&resp, "创建收藏夹失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "创建收藏夹失败: {}",
@@ -250,10 +246,7 @@ pub fn delete_fav_folder(cookies: &Cookies, media_id: i64) -> Result<()> {
     ])
     .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
-    let url = format!(
-        "{}/x/v3/fav/folder/del",
-        crate::api::client::api_base_url()
-    );
+    let url = format!("{}/x/v3/fav/folder/del", crate::api::client::api_base_url());
     let resp = crate::api::client::post(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/x-www-form-urlencoded")
@@ -262,8 +255,7 @@ pub fn delete_fav_folder(cookies: &Cookies, media_id: i64) -> Result<()> {
         .with_body(body)
         .send()?;
 
-    let json: serde_json::Value =
-        crate::api::client::parse_json_response(&resp, "删除收藏夹失败")?;
+    let json: serde_json::Value = crate::api::client::parse_json_response(&resp, "删除收藏夹失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "删除收藏夹失败: {}",
@@ -331,7 +323,10 @@ mod tests {
                 if content_len > 0 {
                     reader.read_exact(&mut buf).unwrap();
                 }
-                captured.push((first.trim().to_string(), String::from_utf8_lossy(&buf).to_string()));
+                captured.push((
+                    first.trim().to_string(),
+                    String::from_utf8_lossy(&buf).to_string(),
+                ));
                 write!(
                     stream,
                     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -378,11 +373,13 @@ mod tests {
         assert!(del_form.contains(&("del_media_ids".into(), "100".into())));
 
         assert!(captured[4].0.starts_with("POST /x/v3/fav/resource/clean"));
-        let create_form: Vec<(String, String)> = serde_urlencoded::from_str(&captured[5].1).unwrap();
+        let create_form: Vec<(String, String)> =
+            serde_urlencoded::from_str(&captured[5].1).unwrap();
         assert!(create_form.contains(&("privacy".into(), "1".into())));
 
         assert!(captured[6].0.starts_with("POST /x/v3/fav/folder/del"));
-        let del_folder_form: Vec<(String, String)> = serde_urlencoded::from_str(&captured[6].1).unwrap();
+        let del_folder_form: Vec<(String, String)> =
+            serde_urlencoded::from_str(&captured[6].1).unwrap();
         assert!(del_folder_form.contains(&("media_ids".into(), "200".into())));
     }
 }

@@ -143,18 +143,18 @@ mod tests {
         std::fs::write(&exec_file, b"#!/bin/sh\necho ffmpeg version 6.0\n").unwrap();
         std::fs::set_permissions(&exec_file, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-        let combined: OsString = std::env::join_paths([
-            dir_non_exec.path(),
-            dir_subdir.path(),
-            dir_exec.path(),
-        ])
-        .unwrap();
+        let combined: OsString =
+            std::env::join_paths([dir_non_exec.path(), dir_subdir.path(), dir_exec.path()])
+                .unwrap();
 
         assert_eq!(
             find_ffmpeg_in_path(None, Some(&combined)),
             Some(exec_file.clone())
         );
-        assert_eq!(ensure_ffmpeg_with(None, Some(&combined)).unwrap(), exec_file);
+        assert_eq!(
+            ensure_ffmpeg_with(None, Some(&combined)).unwrap(),
+            exec_file
+        );
     }
 
     #[cfg(unix)]

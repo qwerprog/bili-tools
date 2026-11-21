@@ -160,7 +160,11 @@ pub fn bili_dialoguer_theme() -> ColorfulTheme {
     }
 
     ColorfulTheme {
-        prompt_prefix: style("?".to_string()).for_stderr().magenta().bright().bold(),
+        prompt_prefix: style("?".to_string())
+            .for_stderr()
+            .magenta()
+            .bright()
+            .bold(),
         prompt_suffix: style("›".to_string()).for_stderr().black().bright(),
         success_prefix: style("✔".to_string()).for_stderr().green().bold(),
         success_suffix: style("·".to_string()).for_stderr().black().bright(),

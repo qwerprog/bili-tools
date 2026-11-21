@@ -108,12 +108,8 @@ pub fn handle_fav(cmd: FavCommands) -> Result<()> {
         } => {
             let cookies = crate::auth::cookies::read_cookies().ok();
             let resolved_id = crate::utils::id::resolve_fav(&media_id, false)?;
-            let data = crate::api::fav::get_fav_resources(
-                resolved_id,
-                page,
-                page_size,
-                cookies.as_ref(),
-            )?;
+            let data =
+                crate::api::fav::get_fav_resources(resolved_id, page, page_size, cookies.as_ref())?;
 
             if is_json() {
                 print_json(&data)?;

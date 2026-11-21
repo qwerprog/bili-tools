@@ -24,7 +24,11 @@ pub struct DanmakuItem {
 /// 获取视频弹幕原始 XML：优先 `{comment_base_url}/{cid}.xml`，失败则回退 `{api_base_url}/x/v1/dm/list.so?oid={cid}`
 pub fn fetch_danmaku_xml(cid: i64, cookies: Option<&Cookies>) -> Result<String> {
     let primary_url = format!("{}/{}.xml", crate::api::client::comment_base_url(), cid);
-    let fallback_url = format!("{}/x/v1/dm/list.so?oid={}", crate::api::client::api_base_url(), cid);
+    let fallback_url = format!(
+        "{}/x/v1/dm/list.so?oid={}",
+        crate::api::client::api_base_url(),
+        cid
+    );
 
     let mut last_err: Option<BiliLiveError> = None;
     for url in [&primary_url, &fallback_url] {
@@ -79,9 +83,8 @@ pub fn decode_danmaku_bytes(bytes: &[u8], content_encoding: Option<&str>) -> Res
         let mut s = String::new();
         dec.read_to_string(&mut s).ok().map(|_| s)
     };
-    let try_plain_utf8 = |data: &[u8]| -> Option<String> {
-        std::str::from_utf8(data).ok().map(|s| s.to_string())
-    };
+    let try_plain_utf8 =
+        |data: &[u8]| -> Option<String> { std::str::from_utf8(data).ok().map(|s| s.to_string()) };
 
     if (enc.contains("gzip") || bytes.starts_with(&[0x1F, 0x8B]))
         && let Some(s) = try_gzip(bytes)
@@ -115,7 +118,9 @@ pub fn decode_danmaku_bytes(bytes: &[u8], content_encoding: Option<&str>) -> Res
         return Ok(s);
     }
 
-    Err(BiliLiveError::Parse("无法解压或解码弹幕 XML 数据".to_string()))
+    Err(BiliLiveError::Parse(
+        "无法解压或解码弹幕 XML 数据".to_string(),
+    ))
 }
 
 /// 单遍 XML 实体反转义（避免链式 replace 造成二次反转义）
@@ -142,10 +147,9 @@ pub fn unescape_xml(input: &str) -> String {
                             .ok()
                             .and_then(char::from_u32)
                     }
-                    _ if entity.starts_with('#') => entity[1..]
-                        .parse::<u32>()
-                        .ok()
-                        .and_then(char::from_u32),
+                    _ if entity.starts_with('#') => {
+                        entity[1..].parse::<u32>().ok().and_then(char::from_u32)
+                    }
                     _ => None,
                 };
                 if let Some(ch) = decoded {
@@ -350,8 +354,14 @@ pub fn parse_danmaku_xml(xml: &str) -> Result<Vec<DanmakuItem>> {
                     .get(5)
                     .and_then(|s| s.trim().parse::<u8>().ok())
                     .unwrap_or(0);
-                let sender_hash = parts.get(6).map(|s| s.trim().to_string()).unwrap_or_default();
-                let dmid = parts.get(7).map(|s| s.trim().to_string()).unwrap_or_default();
+                let sender_hash = parts
+                    .get(6)
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default();
+                let dmid = parts
+                    .get(7)
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default();
                 let weight = parts.get(8).and_then(|s| s.trim().parse::<i32>().ok());
 
                 let trimmed_inner = raw_inner.trim();
@@ -428,7 +438,11 @@ fn estimate_pixel_width(text: &str, px_size: f64) -> f64 {
             continue;
         }
         let w = UnicodeWidthChar::width(ch).unwrap_or(1);
-        total += if w >= 2 { 1.0 * px_size } else { 0.58 * px_size };
+        total += if w >= 2 {
+            1.0 * px_size
+        } else {
+            0.58 * px_size
+        };
     }
     total.max(px_size)
 }
@@ -466,7 +480,9 @@ pub fn to_ass(items: &[DanmakuItem], title: &str) -> String {
     out.push_str("Style: Danmaku,Microsoft YaHei,50,&H00FFFFFF,&H00FFFFFF,&H00000000,&H66000000,1,0,0,0,100,100,0,0,1,2,0,2,20,20,20,1\n\n");
 
     out.push_str("[Events]\n");
-    out.push_str("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n");
+    out.push_str(
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
+    );
 
     let mut scroll_lanes: Vec<Option<ScrollTrack>> = vec![None; MAX_LANES];
     let mut top_lanes: Vec<f64> = vec![0.0; MAX_LANES];
@@ -636,7 +652,10 @@ pub fn to_xml(items: &[DanmakuItem], chat_id: i64) -> String {
     out.push_str("  <chatserver>chat.bilibili.com</chatserver>\n");
     out.push_str(&format!("  <chatid>{chat_id}</chatid>\n"));
     out.push_str("  <mission>0</mission>\n");
-    out.push_str(&format!("  <maxlimit>{}</maxlimit>\n", items.len().max(1000)));
+    out.push_str(&format!(
+        "  <maxlimit>{}</maxlimit>\n",
+        items.len().max(1000)
+    ));
     out.push_str("  <state>0</state>\n");
     out.push_str("  <real_name>0</real_name>\n");
     out.push_str("  <source>bili-tools</source>\n");
@@ -684,7 +703,10 @@ mod tests {
         // 1. Plain XML (with BOM & leading space)
         let mut bom_xml = vec![0xEF, 0xBB, 0xBF, b' '];
         bom_xml.extend_from_slice(xml.as_bytes());
-        assert_eq!(decode_danmaku_bytes(&bom_xml, None).unwrap(), format!(" {xml}"));
+        assert_eq!(
+            decode_danmaku_bytes(&bom_xml, None).unwrap(),
+            format!(" {xml}")
+        );
 
         // 2. Raw RFC 1951 deflate (Bilibili's actual wire format)
         let mut def_enc = DeflateEncoder::new(Vec::new(), Compression::default());
@@ -833,7 +855,9 @@ mod tests {
         assert!(ass.contains("[Script Info]"));
         assert!(ass.contains("[V4+ Styles]"));
         assert!(ass.contains("[Events]"));
-        assert!(ass.contains("Dialogue: 0,0:00:01.00,0:00:09.00,Danmaku,,0,0,0,,{\\an7\\move(1920,20,"));
+        assert!(
+            ass.contains("Dialogue: 0,0:00:01.00,0:00:09.00,Danmaku,,0,0,0,,{\\an7\\move(1920,20,")
+        );
         // 第二条同时弹幕被分配到下一轨道 y=74，避免重叠
         assert!(ass.contains("\\move(1920,74,") && ass.contains("\\c&H0000FF&"));
         assert!(ass.contains("\\an8\\pos(960,20)\\c&H00FF00&"));

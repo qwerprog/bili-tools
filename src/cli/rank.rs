@@ -68,11 +68,8 @@ pub fn handle_rank(cmd: RankCommands) -> Result<()> {
 
     match cmd {
         RankCommands::Video { rid, rank_type } => {
-            let data = crate::api::rank::get_video_ranking(
-                rid,
-                rank_type.as_api_str(),
-                cookies.as_ref(),
-            )?;
+            let data =
+                crate::api::rank::get_video_ranking(rid, rank_type.as_api_str(), cookies.as_ref())?;
 
             if is_json() {
                 print_json(&data)?;
@@ -88,8 +85,7 @@ pub fn handle_rank(cmd: RankCommands) -> Result<()> {
         }
 
         RankCommands::Popular { page, page_size } => {
-            let data =
-                crate::api::rank::get_popular_videos(page, page_size, cookies.as_ref())?;
+            let data = crate::api::rank::get_popular_videos(page, page_size, cookies.as_ref())?;
 
             if is_json() {
                 print_json(&data)?;

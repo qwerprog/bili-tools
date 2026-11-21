@@ -62,7 +62,10 @@ pub fn is_no_color() -> bool {
 /// 获取全局指定的自定义 Cookie 文件路径
 #[allow(dead_code)]
 pub fn cookie_file() -> Option<PathBuf> {
-    COOKIE_FILE.read().unwrap_or_else(|e| e.into_inner()).clone()
+    COOKIE_FILE
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
 }
 
 fn write_spacer_to<W: std::io::Write>(writer: &mut W) -> std::io::Result<()> {

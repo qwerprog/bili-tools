@@ -16,8 +16,7 @@ pub mod video;
 pub use args::{Cli, Commands};
 #[allow(unused_imports)]
 pub use output::{
-    init_output, is_json, is_no_color, is_quiet, is_yes, print_json, print_json_error,
-    set_no_color,
+    init_output, is_json, is_no_color, is_quiet, is_yes, print_json, print_json_error, set_no_color,
 };
 
 use crate::error::Result;

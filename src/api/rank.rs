@@ -28,16 +28,10 @@ fn send_get_json(url: &str, cookies: Option<&Cookies>) -> Result<Value> {
 }
 
 /// 获取分区/全站视频排行榜 (`/x/web-interface/ranking/v2`)
-pub fn get_video_ranking(
-    rid: u32,
-    rank_type: &str,
-    cookies: Option<&Cookies>,
-) -> Result<Value> {
-    let query = serde_urlencoded::to_string([
-        ("rid", rid.to_string()),
-        ("type", rank_type.to_string()),
-    ])
-    .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+pub fn get_video_ranking(rid: u32, rank_type: &str, cookies: Option<&Cookies>) -> Result<Value> {
+    let query =
+        serde_urlencoded::to_string([("rid", rid.to_string()), ("type", rank_type.to_string())])
+            .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
     let url = format!(
         "{}/x/web-interface/ranking/v2?{query}",
@@ -61,11 +55,7 @@ pub fn get_video_ranking(
 }
 
 /// 获取当前综合热门视频 (`/x/web-interface/popular`)
-pub fn get_popular_videos(
-    page: u32,
-    page_size: u32,
-    cookies: Option<&Cookies>,
-) -> Result<Value> {
+pub fn get_popular_videos(page: u32, page_size: u32, cookies: Option<&Cookies>) -> Result<Value> {
     let pn = page.max(1);
     let ps = page_size.clamp(1, 50);
     let url = format!(

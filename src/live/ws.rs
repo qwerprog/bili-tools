@@ -141,7 +141,8 @@ fn decode_ws_packets_depth(data: &[u8], depth: u8) -> Result<Vec<DecodedFrame>> 
 
     while offset + 16 <= data.len() {
         let packet_len = u32::from_be_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
-        let header_len = u16::from_be_bytes(data[offset + 4..offset + 6].try_into().unwrap()) as usize;
+        let header_len =
+            u16::from_be_bytes(data[offset + 4..offset + 6].try_into().unwrap()) as usize;
         let proto_ver = u16::from_be_bytes(data[offset + 6..offset + 8].try_into().unwrap());
         let op = u32::from_be_bytes(data[offset + 8..offset + 12].try_into().unwrap());
 
@@ -161,8 +162,8 @@ fn decode_ws_packets_depth(data: &[u8], depth: u8) -> Result<Vec<DecodedFrame>> 
                 }
             }
             3 => {
-                let mut reader = brotli_decompressor::Decompressor::new(body, 4096)
-                    .take(MAX_DECOMPRESSED_BYTES);
+                let mut reader =
+                    brotli_decompressor::Decompressor::new(body, 4096).take(MAX_DECOMPRESSED_BYTES);
                 let mut decompressed = Vec::new();
                 if reader.read_to_end(&mut decompressed).is_ok()
                     && let Ok(sub) = decode_ws_packets_depth(&decompressed, depth + 1)
@@ -198,9 +199,7 @@ fn decode_ws_packets_depth(data: &[u8], depth: u8) -> Result<Vec<DecodedFrame>> 
 }
 
 /// 纯 Rust 轻量解码 INTERACT_WORD_V2 的 base64 protobuf 负载（零 protoc 依赖）
-pub fn decode_interact_word_v2(
-    b64_pb: &str,
-) -> Option<(String, InteractKind, Option<MedalBadge>)> {
+pub fn decode_interact_word_v2(b64_pb: &str) -> Option<(String, InteractKind, Option<MedalBadge>)> {
     let bytes = general_purpose::STANDARD.decode(b64_pb.trim()).ok()?;
     let mut pos = 0usize;
     let mut uname = String::new();
@@ -395,28 +394,19 @@ pub fn parse_live_command(json: &Value, self_uid: i64) -> Option<LiveEvent> {
             uname = "观众".to_string();
         }
 
-        let is_admin = sender_arr
-            .and_then(|a| a.get(2))
-            .and_then(Value::as_i64)
-            == Some(1);
+        let is_admin = sender_arr.and_then(|a| a.get(2)).and_then(Value::as_i64) == Some(1);
 
-        let medal = info
-            .get(3)
-            .and_then(Value::as_array)
-            .and_then(|m| {
-                let lv = m.first()?.as_u64()? as u32;
-                let name = m.get(1)?.as_str()?;
-                if !name.is_empty() && lv > 0 {
-                    Some((name.to_string(), lv))
-                } else {
-                    None
-                }
-            });
+        let medal = info.get(3).and_then(Value::as_array).and_then(|m| {
+            let lv = m.first()?.as_u64()? as u32;
+            let name = m.get(1)?.as_str()?;
+            if !name.is_empty() && lv > 0 {
+                Some((name.to_string(), lv))
+            } else {
+                None
+            }
+        });
 
-        let guard_level = info
-            .get(7)
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as u8;
+        let guard_level = info.get(7).and_then(Value::as_u64).unwrap_or(0) as u8;
 
         return Some(LiveEvent::Danmaku {
             time,
@@ -506,7 +496,10 @@ pub fn parse_live_command(json: &Value, self_uid: i64) -> Option<LiveEvent> {
 
     if cmd == "INTERACT_WORD" {
         let data = &json["data"];
-        let uname = data["uname"].as_str().filter(|s| !s.is_empty())?.to_string();
+        let uname = data["uname"]
+            .as_str()
+            .filter(|s| !s.is_empty())?
+            .to_string();
         let msg_type = data["msg_type"]
             .as_u64()
             .or_else(|| data["msg_type"].as_str()?.parse().ok())?;

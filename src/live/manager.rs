@@ -78,7 +78,9 @@ pub fn start_live(area_id: &str, show_full_code: bool) -> Result<serde_json::Val
             )));
         }
 
-        user_warning!("触发 B 站开播人脸识别认证 (code=60024)，请使用哔哩哔哩手机客户端扫描下方二维码：");
+        user_warning!(
+            "触发 B 站开播人脸识别认证 (code=60024)，请使用哔哩哔哩手机客户端扫描下方二维码："
+        );
         let _ = crate::utils::qrcode::print_qrcode_in_terminal(&qr_url);
         crate::user_info!("认证链接: {}", qr_url);
 
@@ -120,7 +122,9 @@ pub fn start_live(area_id: &str, show_full_code: bool) -> Result<serde_json::Val
 
     let mut file_content = format!("{rtmp_addr}\n{rtmp_code}\n");
     if let Some(ref d_addr) = direct_rtmp_addr {
-        file_content.push_str(&format!("\n# Direct RTMP (Bypass Proxy)\n{d_addr}\n{rtmp_code}\n"));
+        file_content.push_str(&format!(
+            "\n# Direct RTMP (Bypass Proxy)\n{d_addr}\n{rtmp_code}\n"
+        ));
     }
     if let Some((ref s_addr, ref s_code)) = srt_info {
         file_content.push_str(&format!("\n# SRT\n{s_addr}\n{s_code}\n"));
@@ -167,7 +171,9 @@ pub fn start_live(area_id: &str, show_full_code: bool) -> Result<serde_json::Val
             if let Some((iface, lip)) = crate::utils::direct::detect_physical_ipv4() {
                 card = card.add_row(
                     "OBS绑定网卡",
-                    Cell::pink(format!("{iface} ({lip}) · 在 OBS 设置→高级→网络→绑定到IP 中选择")),
+                    Cell::pink(format!(
+                        "{iface} ({lip}) · 在 OBS 设置→高级→网络→绑定到IP 中选择"
+                    )),
                 );
             }
         }
@@ -434,12 +440,7 @@ mod tests {
 
         let full_res = start_live("371", true).unwrap();
         assert_eq!(full_res["rtmp_code"], "secret_stream_key_12345");
-        assert!(
-            full_res["rtmp_code_masked"]
-                .as_str()
-                .unwrap()
-                .contains('*')
-        );
+        assert!(full_res["rtmp_code_masked"].as_str().unwrap().contains('*'));
 
         let stop_res = stop_live().unwrap();
         assert_eq!(stop_res["success"], true);

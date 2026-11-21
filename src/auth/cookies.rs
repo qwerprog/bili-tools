@@ -129,14 +129,8 @@ pub fn fetch_buvid() -> Result<(String, String)> {
         )));
     }
 
-    let b3 = json["data"]["b_3"]
-        .as_str()
-        .unwrap_or_default()
-        .to_string();
-    let b4 = json["data"]["b_4"]
-        .as_str()
-        .unwrap_or_default()
-        .to_string();
+    let b3 = json["data"]["b_3"].as_str().unwrap_or_default().to_string();
+    let b4 = json["data"]["b_4"].as_str().unwrap_or_default().to_string();
 
     Ok((b3, b4))
 }
@@ -264,7 +258,8 @@ mod tests {
         let content = serde_json::to_string_pretty(&cookies).unwrap();
         write_private(&path, content.as_bytes()).unwrap();
 
-        let loaded: Cookies = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let loaded: Cookies =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(loaded.sessdata, "test_session");
 
         #[cfg(unix)]

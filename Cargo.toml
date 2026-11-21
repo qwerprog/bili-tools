@@ -1,6 +1,6 @@
 [package]
 name = "bili-tools"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 description = "B站工具箱 (Bilibili CLI toolbox)"
 repository = "https://github.com/qwerprog/bili-tools"

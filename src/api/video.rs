@@ -70,10 +70,7 @@ fn get_video_info_from_target(
     Ok(json["data"].clone())
 }
 
-fn fetch_pgc_season_data(
-    query: &str,
-    cookies: Option<&Cookies>,
-) -> Result<serde_json::Value> {
+fn fetch_pgc_season_data(query: &str, cookies: Option<&Cookies>) -> Result<serde_json::Value> {
     let url = format!(
         "{}/pgc/view/web/season?{query}",
         crate::api::client::api_base_url()
@@ -159,9 +156,9 @@ fn resolve_pgc_context(
 
     let mut matched_idx = 0usize;
     if let Some(target_ep) = parsed.episode_id
-        && let Some(pos) = episodes
-            .iter()
-            .position(|ep| ep["id"].as_i64() == Some(target_ep) || ep["ep_id"].as_i64() == Some(target_ep))
+        && let Some(pos) = episodes.iter().position(|ep| {
+            ep["id"].as_i64() == Some(target_ep) || ep["ep_id"].as_i64() == Some(target_ep)
+        })
     {
         matched_idx = pos;
     }
@@ -180,7 +177,9 @@ fn resolve_pgc_context(
     let cid = primary_ep["cid"].as_i64().unwrap_or(0);
     let pubdate = primary_ep["pub_time"].as_i64().unwrap_or(0);
     let up_mid = season["up_info"]["mid"].as_i64().unwrap_or(0);
-    let up_name = season["up_info"]["uname"].as_str().unwrap_or("哔哩哔哩番剧");
+    let up_name = season["up_info"]["uname"]
+        .as_str()
+        .unwrap_or("哔哩哔哩番剧");
 
     let pages: Vec<serde_json::Value> = episodes
         .iter()
@@ -196,7 +195,11 @@ fn resolve_pgc_context(
             };
             let raw_dur = ep["duration"].as_i64().unwrap_or(0);
             // PGC episodes duration 单位通常为毫秒，大于 100_000 时换算为秒
-            let dur_sec = if raw_dur > 100_000 { raw_dur / 1000 } else { raw_dur };
+            let dur_sec = if raw_dur > 100_000 {
+                raw_dur / 1000
+            } else {
+                raw_dur
+            };
             serde_json::json!({
                 "page": idx + 1,
                 "cid": ep["cid"].as_i64().unwrap_or(0),
@@ -331,13 +334,17 @@ pub fn extract_page_info(data: &serde_json::Value, page_num: u32) -> Result<Reso
             .iter()
             .find(|p| p["page"].as_u64() == Some(page_num as u64))
             .or_else(|| pages.get((page_num - 1) as usize))
-            .ok_or_else(|| {
-                BiliLiveError::Input(format!("未找到第 {page_num} P 信息"))
-            })?;
+            .ok_or_else(|| BiliLiveError::Input(format!("未找到第 {page_num} P 信息")))?;
 
         let cid = page_obj["cid"]
             .as_i64()
-            .or_else(|| if page_num == 1 { data["cid"].as_i64() } else { None })
+            .or_else(|| {
+                if page_num == 1 {
+                    data["cid"].as_i64()
+                } else {
+                    None
+                }
+            })
             .ok_or_else(|| BiliLiveError::Parse(format!("第 {page_num} P 缺少 cid")))?;
         let part = page_obj["part"]
             .as_str()
@@ -353,10 +360,7 @@ pub fn extract_page_info(data: &serde_json::Value, page_num: u32) -> Result<Reso
             .filter(|s| !s.is_empty())
             .map(str::to_string)
             .unwrap_or_else(|| bvid.clone());
-        let page_aid = page_obj["aid"]
-            .as_i64()
-            .filter(|&a| a > 0)
-            .unwrap_or(aid);
+        let page_aid = page_obj["aid"].as_i64().filter(|&a| a > 0).unwrap_or(aid);
 
         return Ok(ResolvedVideoPage {
             bvid: page_bvid,
@@ -439,11 +443,15 @@ pub fn resolve_aid_and_bvid(id: &str, cookies: Option<&Cookies>) -> Result<(Stri
             let (target_page, info) = resolve_pgc_context(&parsed, cookies)?;
             let page = extract_page_info(&info, target_page.unwrap_or(1))?;
             if page.aid <= 0 && page.bvid.is_empty() {
-                return Err(BiliLiveError::Parse("未能从番剧详情解析出关联视频 ID".to_string()));
+                return Err(BiliLiveError::Parse(
+                    "未能从番剧详情解析出关联视频 ID".to_string(),
+                ));
             }
             Ok((page.bvid, page.aid))
         }
-        _ => Err(BiliLiveError::Input(format!("输入不是有效的视频标识: {id}"))),
+        _ => Err(BiliLiveError::Input(format!(
+            "输入不是有效的视频标识: {id}"
+        ))),
     }
 }
 
@@ -477,7 +485,9 @@ pub fn resolve_video_aid(id: &str, cookies: Option<&Cookies>) -> Result<i64> {
                 Err(BiliLiveError::Parse("未能从番剧解析出视频 aid".to_string()))
             }
         }
-        _ => Err(BiliLiveError::Input(format!("输入不是有效的视频标识: {id}"))),
+        _ => Err(BiliLiveError::Input(format!(
+            "输入不是有效的视频标识: {id}"
+        ))),
     }
 }
 
@@ -493,8 +503,8 @@ pub fn like_video(cookies: &Cookies, id: &str, cancel: bool) -> Result<()> {
         ("csrf", cookies.bili_jct.as_str()),
     ];
 
-    let body = serde_urlencoded::to_string(params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let body =
+        serde_urlencoded::to_string(params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
     let referer = format!("https://www.bilibili.com/video/{bvid}");
     let url = format!(
@@ -509,8 +519,7 @@ pub fn like_video(cookies: &Cookies, id: &str, cancel: bool) -> Result<()> {
         .with_body(body)
         .send()?;
 
-    let json: serde_json::Value =
-        crate::api::client::parse_json_response(&resp, "点赞操作失败")?;
+    let json: serde_json::Value = crate::api::client::parse_json_response(&resp, "点赞操作失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "点赞操作失败: {}",
@@ -524,9 +533,7 @@ pub fn like_video(cookies: &Cookies, id: &str, cancel: bool) -> Result<()> {
 /// 投币视频
 pub fn coin_video(cookies: &Cookies, id: &str, multiply: u32, also_like: bool) -> Result<bool> {
     if !(1..=2).contains(&multiply) {
-        return Err(BiliLiveError::Input(
-            "投币数量必须为 1 或 2".to_string(),
-        ));
+        return Err(BiliLiveError::Input("投币数量必须为 1 或 2".to_string()));
     }
     let (bvid, aid) = resolve_aid_and_bvid(id, Some(cookies))?;
     let mult = multiply.to_string();
@@ -540,8 +547,8 @@ pub fn coin_video(cookies: &Cookies, id: &str, multiply: u32, also_like: bool) -
         ("csrf", cookies.bili_jct.as_str()),
     ];
 
-    let body = serde_urlencoded::to_string(params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let body =
+        serde_urlencoded::to_string(params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
     let referer = format!("https://www.bilibili.com/video/{bvid}");
     let url = format!(
@@ -556,8 +563,7 @@ pub fn coin_video(cookies: &Cookies, id: &str, multiply: u32, also_like: bool) -
         .with_body(body)
         .send()?;
 
-    let json: serde_json::Value =
-        crate::api::client::parse_json_response(&resp, "投币操作失败")?;
+    let json: serde_json::Value = crate::api::client::parse_json_response(&resp, "投币操作失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "投币操作失败: {}",
@@ -579,8 +585,8 @@ pub fn triple_video(cookies: &Cookies, id: &str) -> Result<serde_json::Value> {
         ("csrf", cookies.bili_jct.as_str()),
     ];
 
-    let body = serde_urlencoded::to_string(params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let body =
+        serde_urlencoded::to_string(params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
 
     let referer = format!("https://www.bilibili.com/video/{bvid}");
     let url = format!(
@@ -595,8 +601,7 @@ pub fn triple_video(cookies: &Cookies, id: &str) -> Result<serde_json::Value> {
         .with_body(body)
         .send()?;
 
-    let json: serde_json::Value =
-        crate::api::client::parse_json_response(&resp, "一键三连失败")?;
+    let json: serde_json::Value = crate::api::client::parse_json_response(&resp, "一键三连失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "一键三连失败: {}",
@@ -607,10 +612,7 @@ pub fn triple_video(cookies: &Cookies, id: &str) -> Result<serde_json::Value> {
     Ok(json["data"].clone())
 }
 
-fn attach_optional_cookies(
-    mut req: minreq::Request,
-    cookies: Option<&Cookies>,
-) -> minreq::Request {
+fn attach_optional_cookies(mut req: minreq::Request, cookies: Option<&Cookies>) -> minreq::Request {
     if let Some(c) = cookies {
         let header = c.cookie_header();
         if !header.is_empty() {
@@ -659,8 +661,8 @@ pub fn get_pgc_playurl(
     if aid > 0 {
         params.push(("avid", aid_str.as_str()));
     }
-    let query = serde_urlencoded::to_string(&params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let query =
+        serde_urlencoded::to_string(&params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
     let url = format!(
         "{}/pgc/player/web/playurl?{query}",
         crate::api::client::api_base_url()
@@ -711,8 +713,9 @@ pub fn get_video_playurl(
     let sessdata = cookies.map(|c| c.sessdata.as_str());
     let query = match crate::api::wbi::sign_params(&params, sessdata) {
         Ok(q) => q,
-        Err(_) => serde_urlencoded::to_string(&params)
-            .map_err(|e| BiliLiveError::Parse(e.to_string()))?,
+        Err(_) => {
+            serde_urlencoded::to_string(&params).map_err(|e| BiliLiveError::Parse(e.to_string()))?
+        }
     };
 
     let url = format!(
@@ -765,8 +768,9 @@ pub fn get_player_v2(
     let sessdata = cookies.map(|c| c.sessdata.as_str());
     let query = match crate::api::wbi::sign_params(&params, sessdata) {
         Ok(q) => q,
-        Err(_) => serde_urlencoded::to_string(&params)
-            .map_err(|e| BiliLiveError::Parse(e.to_string()))?,
+        Err(_) => {
+            serde_urlencoded::to_string(&params).map_err(|e| BiliLiveError::Parse(e.to_string()))?
+        }
     };
 
     let url = format!(
@@ -896,12 +900,11 @@ fn resolve_bvid_or_aid_pair(
         IdKind::Numeric => Ok((None, Some(parsed.id.parse::<i64>()?))),
         IdKind::BangumiEpisode | IdKind::BangumiSeason | IdKind::BangumiMedia => {
             let (bvid, aid) = resolve_aid_and_bvid(id, cookies)?;
-            Ok((
-                (!bvid.is_empty()).then_some(bvid),
-                (aid > 0).then_some(aid),
-            ))
+            Ok(((!bvid.is_empty()).then_some(bvid), (aid > 0).then_some(aid)))
         }
-        _ => Err(BiliLiveError::Input(format!("输入不是有效的视频标识: {id}"))),
+        _ => Err(BiliLiveError::Input(format!(
+            "输入不是有效的视频标识: {id}"
+        ))),
     }
 }
 
@@ -918,8 +921,8 @@ pub fn get_video_tags(id: &str, cookies: Option<&Cookies>) -> Result<Vec<serde_j
         return Err(BiliLiveError::Input(format!("无效的视频标识: {id}")));
     }
 
-    let query = serde_urlencoded::to_string(&params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let query =
+        serde_urlencoded::to_string(&params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
     let url = format!(
         "{}/x/web-interface/view/detail/tag?{query}",
         crate::api::client::api_base_url()
@@ -965,8 +968,8 @@ pub fn get_video_related(id: &str, cookies: Option<&Cookies>) -> Result<Vec<serd
         return Err(BiliLiveError::Input(format!("无效的视频标识: {id}")));
     }
 
-    let query = serde_urlencoded::to_string(&params)
-        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let query =
+        serde_urlencoded::to_string(&params).map_err(|e| BiliLiveError::Parse(e.to_string()))?;
     let url = format!(
         "{}/x/web-interface/archive/related?{query}",
         crate::api::client::api_base_url()
@@ -1165,7 +1168,11 @@ pub fn parse_durl_segments(playurl_data: &serde_json::Value) -> Vec<DurlSegment>
     playurl_data
         .get("durl")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(DurlSegment::from_json_value).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(DurlSegment::from_json_value)
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -1238,10 +1245,7 @@ pub fn select_dash_video(
         }
     }
 
-    candidates
-        .into_iter()
-        .max_by_key(|s| s.bandwidth)
-        .cloned()
+    candidates.into_iter().max_by_key(|s| s.bandwidth).cloned()
 }
 
 /// 选择最高码率 DASH 音频流
@@ -1388,9 +1392,7 @@ pub fn download_binary_to_path(
         .build()
         .into();
 
-    let cookie_header = cookies
-        .map(|c| c.cookie_header())
-        .filter(|h| !h.is_empty());
+    let cookie_header = cookies.map(|c| c.cookie_header()).filter(|h| !h.is_empty());
 
     let show_progress = !crate::cli::output::is_json()
         && !crate::cli::output::is_quiet()
@@ -1527,14 +1529,7 @@ pub fn mux_dash_streams(
     output_path: &Path,
 ) -> Result<()> {
     let out = std::process::Command::new(ffmpeg_bin)
-        .args([
-            "-y",
-            "-nostdin",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
-        ])
+        .args(["-y", "-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
         .arg(video_path)
         .arg("-i")
         .arg(audio_path)
@@ -1636,7 +1631,8 @@ mod tests {
                 } else {
                     assert!(first_line.contains("/x/web-interface/wbi/view"));
                     assert!(first_line.contains("bvid=BV1uJ411r7hL"));
-                    r#"{"code":0,"data":{"aid":79677524,"bvid":"BV1uJ411r7hL","title":"Test"}}"#.to_string()
+                    r#"{"code":0,"data":{"aid":79677524,"bvid":"BV1uJ411r7hL","title":"Test"}}"#
+                        .to_string()
                 };
                 write!(
                     stream,
@@ -1654,7 +1650,8 @@ mod tests {
         unsafe {
             std::env::set_var("BT_API_BASE_URL", &base);
         }
-        let aid = resolve_video_aid("https://www.bilibili.com/video/bv1uJ411r7hL?p=2", None).unwrap();
+        let aid =
+            resolve_video_aid("https://www.bilibili.com/video/bv1uJ411r7hL?p=2", None).unwrap();
         handle.join().unwrap();
         assert_eq!(aid, 79677524);
     }

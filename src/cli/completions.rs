@@ -61,7 +61,13 @@ pub fn handle_completions(shell: Option<Shell>, install: bool) -> Result<()> {
     if install {
         let home = std::env::var("HOME")
             .ok()
-            .and_then(|h| if h.is_empty() { None } else { Some(std::path::PathBuf::from(h)) })
+            .and_then(|h| {
+                if h.is_empty() {
+                    None
+                } else {
+                    Some(std::path::PathBuf::from(h))
+                }
+            })
             .or_else(dirs::home_dir)
             .unwrap_or_else(|| std::path::PathBuf::from("."));
 
@@ -126,14 +132,21 @@ pub fn handle_completions(shell: Option<Shell>, install: bool) -> Result<()> {
                 Shell::Zsh => {
                     if let Some(omz_path) = omz_installed {
                         user_success!("检测到 Oh My Zsh，已同步安装到 {}", omz_path.display());
-                        user_info!("执行 `autoload -Uz compinit && compinit` 或重开终端即可直接按 Tab 补全");
+                        user_info!(
+                            "执行 `autoload -Uz compinit && compinit` 或重开终端即可直接按 Tab 补全"
+                        );
                     } else {
-                        user_info!("请在 ~/.zshrc 中添加 fpath=(~/.zsh/completions $fpath)，然后执行 exec zsh 生效");
+                        user_info!(
+                            "请在 ~/.zshrc 中添加 fpath=(~/.zsh/completions $fpath)，然后执行 exec zsh 生效"
+                        );
                     }
                 }
                 Shell::Bash => user_info!("请执行 source {} 或重新打开终端生效", file.display()),
                 Shell::Fish => user_info!("重新打开 fish 终端即可生效"),
-                Shell::PowerShell => user_info!("请在 PowerShell $PROFILE 中添加 `. {}` 生效", file.display()),
+                Shell::PowerShell => user_info!(
+                    "请在 PowerShell $PROFILE 中添加 `. {}` 生效",
+                    file.display()
+                ),
                 Shell::Elvish => user_info!("请在 ~/.config/elvish/rc.elv 中添加 `use bit` 生效"),
             }
         }

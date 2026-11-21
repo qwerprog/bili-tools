@@ -452,7 +452,10 @@ pub(crate) fn handle_live_info(room: Option<String>) -> Result<()> {
         .add_plain_row("UID", uid.to_string())
         .add_row("标题", Cell::bold_colored(title, Color::White))
         .add_plain_row("分区", area_display)
-        .add_row("在线人气", Cell::pink(format_num(&serde_json::json!(online))))
+        .add_row(
+            "在线人气",
+            Cell::pink(format_num(&serde_json::json!(online))),
+        )
         .add_plain_row("关注数", format_num(&serde_json::json!(attention)));
     if !live_time.is_empty() && !live_time.starts_with("0000-") {
         card = card.add_plain_row("开播时间", live_time);
@@ -859,11 +862,7 @@ pub(crate) fn handle_live_danmaku_follow(
     crate::ui::live_chat::run_follow_stream(ctx, cookies, show_enter, max_events)
 }
 
-pub(crate) fn handle_live_chat(
-    room: Option<String>,
-    no_enter: bool,
-    history: u32,
-) -> Result<()> {
+pub(crate) fn handle_live_chat(room: Option<String>, no_enter: bool, history: u32) -> Result<()> {
     let cookies = crate::auth::cookies::read_cookies().ok();
     let canonical_id = match room {
         Some(ref raw) => resolve_target_room_canonical(raw)?,
@@ -914,10 +913,7 @@ struct LiveDanmakuRecorder {
     collector: std::thread::JoinHandle<Vec<crate::api::danmaku::DanmakuItem>>,
 }
 
-fn start_live_danmaku_recorder(
-    room_id: i64,
-    cookies: Option<Cookies>,
-) -> LiveDanmakuRecorder {
+fn start_live_danmaku_recorder(room_id: i64, cookies: Option<Cookies>) -> LiveDanmakuRecorder {
     use crate::api::danmaku::DanmakuItem;
     use crate::live::ws::{LiveEvent, spawn_live_ws_listener};
     use std::sync::Arc;
@@ -957,10 +953,7 @@ fn start_live_danmaku_recorder(
                     });
                 }
                 Ok(LiveEvent::SuperChat {
-                    uname,
-                    price,
-                    text,
-                    ..
+                    uname, price, text, ..
                 }) => {
                     items.push(DanmakuItem {
                         time: seg_start.elapsed().as_secs_f64(),
@@ -1047,10 +1040,7 @@ fn resolve_segment_output_path(
                 if segment_idx == 0 && !p.exists() {
                     return Ok(p.to_path_buf());
                 }
-                let stem = p
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("live");
+                let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("live");
                 let ext = p
                     .extension()
                     .and_then(|e| e.to_str())
@@ -1207,15 +1197,13 @@ pub(crate) fn handle_live_record(opts: LiveRecordOptions) -> Result<()> {
         let dm_rec = opts
             .danmaku
             .then(|| start_live_danmaku_recorder(canonical_id, cookies.clone()));
-        let was_interrupted = run_ffmpeg_segment(
-            &ffmpeg_bin,
-            &selected.url,
-            duration_secs,
-            &output_path,
-        )?;
+        let was_interrupted =
+            run_ffmpeg_segment(&ffmpeg_bin, &selected.url, duration_secs, &output_path)?;
 
         let dm_saved = match dm_rec {
-            Some(rec) => Some(rec.finish_and_save(&output_path, canonical_id, opts.danmaku_format)?),
+            Some(rec) => {
+                Some(rec.finish_and_save(&output_path, canonical_id, opts.danmaku_format)?)
+            }
             None => None,
         };
 
@@ -1262,7 +1250,11 @@ pub(crate) fn handle_live_record(opts: LiveRecordOptions) -> Result<()> {
         "进入直播值守录制模式: 房间 #{} (轮询间隔={}s{}，按 Ctrl+C 停止)",
         canonical_id,
         opts.interval,
-        if opts.danmaku { "，同步录制弹幕" } else { "" }
+        if opts.danmaku {
+            "，同步录制弹幕"
+        } else {
+            ""
+        }
     );
 
     let mut segment_reports = Vec::new();
@@ -1281,9 +1273,9 @@ pub(crate) fn handle_live_record(opts: LiveRecordOptions) -> Result<()> {
             Ok(info) => info,
             Err(e) => {
                 user_warning!("查询直播状态暂时失败，{}s 后重试: {}", opts.interval, e);
-                if crate::utils::interrupt::sleep_interruptible(
-                    std::time::Duration::from_secs(opts.interval),
-                )
+                if crate::utils::interrupt::sleep_interruptible(std::time::Duration::from_secs(
+                    opts.interval,
+                ))
                 .is_err()
                 {
                     break;
@@ -1318,9 +1310,9 @@ pub(crate) fn handle_live_record(opts: LiveRecordOptions) -> Result<()> {
                 );
                 logged_waiting = true;
             }
-            if crate::utils::interrupt::sleep_interruptible(
-                std::time::Duration::from_secs(opts.interval),
-            )
+            if crate::utils::interrupt::sleep_interruptible(std::time::Duration::from_secs(
+                opts.interval,
+            ))
             .is_err()
             {
                 break;
@@ -1379,7 +1371,12 @@ pub(crate) fn handle_live_record(opts: LiveRecordOptions) -> Result<()> {
                 break;
             }
             Ok(false) => {
-                user_success!("分段 #{} 录制结束: {} ({} bytes)", segment_idx, seg_path.display(), bytes);
+                user_success!(
+                    "分段 #{} 录制结束: {} ({} bytes)",
+                    segment_idx,
+                    seg_path.display(),
+                    bytes
+                );
                 if duration_secs.is_some() && opts.once {
                     break;
                 }
@@ -1404,10 +1401,7 @@ pub(crate) fn handle_live_record(opts: LiveRecordOptions) -> Result<()> {
             "segments": segment_reports,
         }))?;
     } else {
-        user_success!(
-            "值守录制结束，共保存 {} 个视频分段",
-            segment_reports.len()
-        );
+        user_success!("值守录制结束，共保存 {} 个视频分段", segment_reports.len());
     }
 
     if crate::utils::interrupt::is_interrupted() {
@@ -1748,7 +1742,10 @@ mod tests {
         })
         .unwrap_err();
         assert!(matches!(err, BiliLiveError::ExternalTool(_)));
-        assert!(listener.accept().is_err(), "no HTTP requests expected when ffmpeg is missing");
+        assert!(
+            listener.accept().is_err(),
+            "no HTTP requests expected when ffmpeg is missing"
+        );
 
         // Now test with a mock executable ffmpeg script via BT_FFMPEG_PATH
         #[cfg(unix)]

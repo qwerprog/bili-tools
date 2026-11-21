@@ -70,7 +70,9 @@ fn extract_credentials(json: &Value) -> Result<(String, String, String, String, 
             Some("SESSDATA") => sessdata = cookie["value"].as_str().unwrap_or("").to_string(),
             Some("bili_jct") => csrf_token = cookie["value"].as_str().unwrap_or("").to_string(),
             Some("DedeUserID") => dede_user_id = cookie["value"].as_str().unwrap_or("").to_string(),
-            Some("DedeUserID__ckMd5") => dede_user_id_ck_md5 = cookie["value"].as_str().unwrap_or("").to_string(),
+            Some("DedeUserID__ckMd5") => {
+                dede_user_id_ck_md5 = cookie["value"].as_str().unwrap_or("").to_string()
+            }
             _ => {}
         }
     }
@@ -84,7 +86,13 @@ fn extract_credentials(json: &Value) -> Result<(String, String, String, String, 
         .unwrap_or("")
         .to_string();
 
-    Ok((sessdata, csrf_token, dede_user_id, dede_user_id_ck_md5, refresh_token))
+    Ok((
+        sessdata,
+        csrf_token,
+        dede_user_id,
+        dede_user_id_ck_md5,
+        refresh_token,
+    ))
 }
 
 // ── TV 扫码登录（二维码更短，相比 Web API 更易扫描）────────────────
@@ -628,10 +636,7 @@ pub fn get_roomid_by_mid(mid: i64) -> Result<i32> {
 }
 
 pub fn get_roomid(sessdata: &str) -> Result<i32> {
-    let nav_url = format!(
-        "{}/x/web-interface/nav",
-        crate::api::client::api_base_url()
-    );
+    let nav_url = format!("{}/x/web-interface/nav", crate::api::client::api_base_url());
     let response = crate::api::client::get(&nav_url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Cookie", format!("SESSDATA={}", sessdata))
@@ -650,10 +655,7 @@ JNrRuoEUXpabUzGB8QIDAQAB
 -----END PUBLIC KEY-----"#;
 
 pub fn get_user_info(cookies: &crate::auth::cookies::Cookies) -> Result<serde_json::Value> {
-    let nav_url = format!(
-        "{}/x/web-interface/nav",
-        crate::api::client::api_base_url()
-    );
+    let nav_url = format!("{}/x/web-interface/nav", crate::api::client::api_base_url());
     let response = crate::api::client::get(&nav_url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Cookie", cookies.cookie_header())
@@ -690,7 +692,8 @@ pub fn check_cookie_need_refresh(cookies: &crate::auth::cookies::Cookies) -> Res
         .with_header("Cookie", cookies.cookie_header())
         .send()?;
 
-    let json: Value = crate::api::client::parse_json_response(&response, "检查 Cookie 刷新状态失败")?;
+    let json: Value =
+        crate::api::client::parse_json_response(&response, "检查 Cookie 刷新状态失败")?;
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
             "检查 Cookie 刷新状态失败: {}",
@@ -748,7 +751,9 @@ pub fn get_refresh_csrf(correspond_path: &str, sessdata: &str) -> Result<String>
             }
         }
     }
-    Err(BiliLiveError::Api("未能从对应页面提取 refresh_csrf".to_string()))
+    Err(BiliLiveError::Api(
+        "未能从对应页面提取 refresh_csrf".to_string(),
+    ))
 }
 
 pub fn refresh_cookie(cookies: &mut crate::auth::cookies::Cookies) -> Result<()> {
@@ -870,7 +875,9 @@ pub struct LiveSignResult {
 pub(crate) fn parse_exp_reward(json: &Value) -> Result<ExpRewardStatus> {
     let code = json["code"].as_i64().unwrap_or(-1);
     if code == -101 {
-        return Err(BiliLiveError::Auth("登录凭证已失效，请重新登录".to_string()));
+        return Err(BiliLiveError::Auth(
+            "登录凭证已失效，请重新登录".to_string(),
+        ));
     }
     if code != 0 {
         return Err(BiliLiveError::Api(format!(
@@ -887,8 +894,10 @@ pub(crate) fn parse_exp_reward(json: &Value) -> Result<ExpRewardStatus> {
     let tel = data["tel"].as_bool().unwrap_or(false);
     let safe_question = data["safe_question"].as_bool().unwrap_or(false);
     let identify_card = data["identify_card"].as_bool().unwrap_or(false);
-    let today_exp =
-        (if login { 5 } else { 0 }) + (if watch { 5 } else { 0 }) + coins.clamp(0, 50) + (if share { 5 } else { 0 });
+    let today_exp = (if login { 5 } else { 0 })
+        + (if watch { 5 } else { 0 })
+        + coins.clamp(0, 50)
+        + (if share { 5 } else { 0 });
 
     Ok(ExpRewardStatus {
         login,
@@ -904,14 +913,16 @@ pub(crate) fn parse_exp_reward(json: &Value) -> Result<ExpRewardStatus> {
 }
 
 pub fn get_exp_reward(cookies: &crate::auth::cookies::Cookies) -> Result<ExpRewardStatus> {
-    let url = format!("{}/x/member/web/exp/reward", crate::api::client::api_base_url());
+    let url = format!(
+        "{}/x/member/web/exp/reward",
+        crate::api::client::api_base_url()
+    );
     let response = crate::api::client::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Referer", "https://www.bilibili.com/")
         .with_header("Cookie", cookies.cookie_header())
         .send()?;
-    let json: Value =
-        crate::api::client::parse_json_response(&response, "获取每日经验状态失败")?;
+    let json: Value = crate::api::client::parse_json_response(&response, "获取每日经验状态失败")?;
     parse_exp_reward(&json)
 }
 
@@ -964,10 +975,16 @@ pub(crate) fn parse_live_sign(json: &Value) -> Result<LiveSignResult> {
                 message
             },
         }),
-        -101 => Err(BiliLiveError::Auth("登录凭证已失效，请重新登录".to_string())),
+        -101 => Err(BiliLiveError::Auth(
+            "登录凭证已失效，请重新登录".to_string(),
+        )),
         _ => Err(BiliLiveError::Api(format!(
             "直播签到失败: {}",
-            if message.is_empty() { "未知错误" } else { &message }
+            if message.is_empty() {
+                "未知错误"
+            } else {
+                &message
+            }
         ))),
     }
 }

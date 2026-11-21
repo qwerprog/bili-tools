@@ -153,7 +153,8 @@ pub fn handle_history(cmd: HistoryCommands) -> Result<()> {
         }
 
         HistoryCommands::Clear => {
-            if !confirm_action("确定要清空全部观看历史记录吗？此操作不可撤销")? {
+            if !confirm_action("确定要清空全部观看历史记录吗？此操作不可撤销")?
+            {
                 user_info!("已取消操作");
                 return Ok(());
             }

@@ -134,7 +134,10 @@ mod tests {
             "https://api.bilibili.com"
         );
         assert_eq!(
-            resolve_base_url_from(Some("http://127.0.0.1:8080/// "), "https://api.bilibili.com"),
+            resolve_base_url_from(
+                Some("http://127.0.0.1:8080/// "),
+                "https://api.bilibili.com"
+            ),
             "http://127.0.0.1:8080"
         );
     }

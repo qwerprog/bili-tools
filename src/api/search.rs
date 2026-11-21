@@ -26,8 +26,7 @@ fn perform_wbi_search(
     }
 
     let resp = req.send()?;
-    let json: serde_json::Value =
-        crate::api::client::parse_json_response(&resp, "搜索请求失败")?;
+    let json: serde_json::Value = crate::api::client::parse_json_response(&resp, "搜索请求失败")?;
 
     if json["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
@@ -107,17 +106,15 @@ fn normalize_hot_list(mut val: serde_json::Value, limit: usize) -> serde_json::V
 }
 
 /// 获取热搜列表（优先 WBI `/x/web-interface/wbi/search/square`，失败时回退至 `hotword`）
-pub fn get_hot_search(
-    limit: Option<u32>,
-    cookies: Option<&Cookies>,
-) -> Result<serde_json::Value> {
+pub fn get_hot_search(limit: Option<u32>, cookies: Option<&Cookies>) -> Result<serde_json::Value> {
     let lim = limit.unwrap_or(20).clamp(1, 50);
     let lim_str = lim.to_string();
     let sessdata = cookies.map(|c| c.sessdata.as_str());
 
-    if let Ok(signed_query) =
-        sign_params(&[("limit", lim_str.as_str()), ("platform", "web")], sessdata)
-    {
+    if let Ok(signed_query) = sign_params(
+        &[("limit", lim_str.as_str()), ("platform", "web")],
+        sessdata,
+    ) {
         let url = format!(
             "{}/x/web-interface/wbi/search/square?{signed_query}",
             crate::api::client::api_base_url()
@@ -148,7 +145,10 @@ pub fn get_hot_search(
     }
 
     // 备用接口：hotword
-    let fallback_url = format!("{}/main/hotword", crate::api::client::search_fallback_base_url());
+    let fallback_url = format!(
+        "{}/main/hotword",
+        crate::api::client::search_fallback_base_url()
+    );
     let mut fallback_req = crate::api::client::get(&fallback_url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Referer", "https://www.bilibili.com/");
@@ -226,7 +226,9 @@ mod tests {
                     if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
                         break;
                     }
-                    if line.to_ascii_lowercase().starts_with("cookie:") && line.contains("SESSDATA=s1") {
+                    if line.to_ascii_lowercase().starts_with("cookie:")
+                        && line.contains("SESSDATA=s1")
+                    {
                         has_cookie = true;
                     }
                 }
@@ -239,7 +241,8 @@ mod tests {
                 } else if idx == 2 {
                     r#"{"code":-400,"message":"bad"}"#.to_string()
                 } else {
-                    r#"{"code":0,"data":{"numResults":1,"result":[{"mid":42,"uname":"up"}]}}"#.to_string()
+                    r#"{"code":0,"data":{"numResults":1,"result":[{"mid":42,"uname":"up"}]}}"#
+                        .to_string()
                 };
                 write!(
                     stream,
@@ -266,7 +269,8 @@ mod tests {
                     break;
                 }
             }
-            let body = r#"{"code":0,"list":[{"keyword":"fb1"},{"keyword":"fb2"},{"keyword":"fb3"}]}"#;
+            let body =
+                r#"{"code":0,"list":[{"keyword":"fb1"},{"keyword":"fb2"},{"keyword":"fb3"}]}"#;
             write!(
                 stream,
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",

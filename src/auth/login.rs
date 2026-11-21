@@ -91,7 +91,9 @@ pub fn start_login_with_options(opts: LoginOptions) -> Result<()> {
             }
             login_by_password_flow()
         }
-        Some(LoginMethod::Cookie) => login_by_cookie(opts.sessdata, opts.bili_jct, opts.dede_user_id),
+        Some(LoginMethod::Cookie) => {
+            login_by_cookie(opts.sessdata, opts.bili_jct, opts.dede_user_id)
+        }
         None => {
             if crate::cli::output::is_json() || !std::io::stdin().is_terminal() {
                 return Err(BiliLiveError::Input(
@@ -109,7 +111,9 @@ pub fn start_login_with_options(opts: LoginOptions) -> Result<()> {
                 .item("浏览器登录")
                 .item("扫码登录（TV，备用）")
                 .interact()
-                .map_err(|e| crate::error::BiliLiveError::Input(format!("选择登录方式失败: {e}")))?;
+                .map_err(|e| {
+                    crate::error::BiliLiveError::Input(format!("选择登录方式失败: {e}"))
+                })?;
 
             match selection {
                 0 => login_by_qrcode(false),

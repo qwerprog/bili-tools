@@ -48,12 +48,14 @@ fn parse_page_spec_syntax(spec: &str) -> Result<PageSpec> {
             if end_s.contains('-') {
                 return Err(BiliLiveError::Input(format!("无效的分P范围: {seg}")));
             }
-            let start: u32 = start_s.trim().parse().map_err(|_| {
-                BiliLiveError::Input(format!("无效的分P起始编号: {seg}"))
-            })?;
-            let end: u32 = end_s.trim().parse().map_err(|_| {
-                BiliLiveError::Input(format!("无效的分P结束编号: {seg}"))
-            })?;
+            let start: u32 = start_s
+                .trim()
+                .parse()
+                .map_err(|_| BiliLiveError::Input(format!("无效的分P起始编号: {seg}")))?;
+            let end: u32 = end_s
+                .trim()
+                .parse()
+                .map_err(|_| BiliLiveError::Input(format!("无效的分P结束编号: {seg}")))?;
             if start == 0 || end == 0 || start > end {
                 return Err(BiliLiveError::Input(format!(
                     "无效的分P范围 '{seg}'：起始页码必须 >= 1 且不大于结束页码"
@@ -75,9 +77,9 @@ fn parse_page_spec_syntax(spec: &str) -> Result<PageSpec> {
                 }
             }
         } else {
-            let p: u32 = seg.parse().map_err(|_| {
-                BiliLiveError::Input(format!("无效的分P编号: {seg}"))
-            })?;
+            let p: u32 = seg
+                .parse()
+                .map_err(|_| BiliLiveError::Input(format!("无效的分P编号: {seg}")))?;
             if p == 0 {
                 return Err(BiliLiveError::Input("分P编号必须大于等于 1".to_string()));
             }
@@ -255,9 +257,8 @@ fn expand_output_template(
         .extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| !e.contains('{') && !e.contains('}') && is_known_media_ext(e));
-    let is_dir_hint = raw_tpl.ends_with('/')
-        || raw_tpl.ends_with('\\')
-        || Path::new(&raw_tpl).is_dir();
+    let is_dir_hint =
+        raw_tpl.ends_with('/') || raw_tpl.ends_with('\\') || Path::new(&raw_tpl).is_dir();
 
     let expanded = raw_tpl
         .replace("{title}", &clean_title)
@@ -320,13 +321,9 @@ fn stem_sibling_path(base: &Path, suffix: &str) -> PathBuf {
         .and_then(|e| e.to_str())
         .is_some_and(is_known_media_ext);
     let stem = if has_known_ext {
-        base.file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("video")
+        base.file_stem().and_then(|s| s.to_str()).unwrap_or("video")
     } else {
-        base.file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("video")
+        base.file_name().and_then(|s| s.to_str()).unwrap_or("video")
     };
     let mut out = base.to_path_buf();
     out.set_file_name(format!("{stem}{suffix}"));
@@ -447,8 +444,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     cookies.as_ref(),
                 )?
             };
-            let (video_streams, audio_streams) =
-                crate::api::video::parse_dash_streams(&playurl);
+            let (video_streams, audio_streams) = crate::api::video::parse_dash_streams(&playurl);
             let durl = crate::api::video::parse_durl_segments(&playurl);
 
             if is_json() {
@@ -473,7 +469,10 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             print_spacer();
             print_section_header(
                 "可用视频流",
-                Some(&format!("{} · P{} · cid={}", resolved.bvid, resolved.page, resolved.cid)),
+                Some(&format!(
+                    "{} · P{} · cid={}",
+                    resolved.bvid, resolved.page, resolved.cid
+                )),
             );
             if !video_streams.is_empty() {
                 let cols = [
@@ -494,7 +493,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                                 truncate_to_width(&s.codecs, 11)
                             )),
                             Cell::plain(format!("{}x{}", s.width, s.height)),
-                            Cell::plain(if s.frame_rate.is_empty() { "-" } else { &s.frame_rate }),
+                            Cell::plain(if s.frame_rate.is_empty() {
+                                "-"
+                            } else {
+                                &s.frame_rate
+                            }),
                             Cell::muted((s.bandwidth / 1000).to_string()),
                         ]
                     })
@@ -504,7 +507,10 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             }
 
             if !audio_streams.is_empty() {
-                print_section_header("可用音频流", Some(&format!("共 {} 条", audio_streams.len())));
+                print_section_header(
+                    "可用音频流",
+                    Some(&format!("共 {} 条", audio_streams.len())),
+                );
                 let cols = [
                     Column::right("ID", 7),
                     Column::left("编码", 16),
@@ -517,7 +523,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                         vec![
                             Cell::cyan(s.id.to_string()),
                             Cell::plain(if s.codecs.is_empty() { "-" } else { &s.codecs }),
-                            Cell::plain(if s.mime_type.is_empty() { "-" } else { &s.mime_type }),
+                            Cell::plain(if s.mime_type.is_empty() {
+                                "-"
+                            } else {
+                                &s.mime_type
+                            }),
                             Cell::muted((s.bandwidth / 1000).to_string()),
                         ]
                     })
@@ -556,9 +566,13 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 print_spacer();
             } else if (!video_streams.is_empty() || !audio_streams.is_empty()) && !is_quiet() {
                 // 展示首选 DASH 视频与音频流的完整未截断直链，方便外部播放器或调试工具直接使用
-                print_section_header("首选直链地址 (未截断)", Some("需携带 Referer: https://www.bilibili.com/"));
+                print_section_header(
+                    "首选直链地址 (未截断)",
+                    Some("需携带 Referer: https://www.bilibili.com/"),
+                );
                 let mut stdout = std::io::stdout().lock();
-                if let Some(best_v) = crate::api::video::select_dash_video(&video_streams, 127, "avc")
+                if let Some(best_v) =
+                    crate::api::video::select_dash_video(&video_streams, 127, "avc")
                     && !best_v.base_url.is_empty()
                 {
                     let _ = writeln!(
@@ -571,7 +585,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                         best_v.base_url
                     );
                 }
-                if let Some(best_a) = crate::api::video::select_dash_audio_with_quality(&audio_streams, None)
+                if let Some(best_a) =
+                    crate::api::video::select_dash_audio_with_quality(&audio_streams, None)
                     && !best_a.base_url.is_empty()
                 {
                     let _ = writeln!(
@@ -748,7 +763,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 .add_plain_row("分P", format!("P{} · {}", resolved.page, resolved.part))
                 .add_row(
                     "摘要",
-                    Cell::plain(if summary_text.is_empty() { "-" } else { summary_text }),
+                    Cell::plain(if summary_text.is_empty() {
+                        "-"
+                    } else {
+                        summary_text
+                    }),
                 );
 
             print_spacer();
@@ -762,7 +781,9 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 print_section_header("内容大纲", Some(&format!("共 {} 节", outline.len())));
                 print_spacer();
                 let color = crate::ui::theme::color_enabled();
-                let wrap_w = crate::ui::theme::terminal_width().saturating_sub(14).max(36);
+                let wrap_w = crate::ui::theme::terminal_width()
+                    .saturating_sub(14)
+                    .max(36);
                 for (idx, sec) in outline.iter().enumerate() {
                     let sec_ts = format_duration(sec["timestamp"].as_i64().unwrap_or(0));
                     let sec_title = sec["title"].as_str().unwrap_or("-");
@@ -770,8 +791,12 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                         use crossterm::style::Stylize;
                         println!(
                             "  {} {} {}",
-                            format!("{}.", idx + 1).with(crate::ui::theme::BILI_PINK).bold(),
-                            format!("[{sec_ts}]").with(crate::ui::theme::BILI_CYAN).bold(),
+                            format!("{}.", idx + 1)
+                                .with(crate::ui::theme::BILI_PINK)
+                                .bold(),
+                            format!("[{sec_ts}]")
+                                .with(crate::ui::theme::BILI_CYAN)
+                                .bold(),
                             sec_title.bold()
                         );
                     } else {
@@ -925,9 +950,10 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
 
             let content = match format {
                 DanmakuFormat::Xml => xml,
-                DanmakuFormat::Ass => {
-                    crate::api::danmaku::to_ass(&items, &format!("{} - {}", resolved.title, resolved.part))
-                }
+                DanmakuFormat::Ass => crate::api::danmaku::to_ass(
+                    &items,
+                    &format!("{} - {}", resolved.title, resolved.part),
+                ),
                 DanmakuFormat::Txt => crate::api::danmaku::to_txt(&items),
                 DanmakuFormat::Json => serde_json::to_string_pretty(&json!({
                     "bvid": resolved.bvid,
@@ -1085,12 +1111,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 return Ok(());
             }
 
-            let data = crate::api::comment::get_comments(
-                aid,
-                page,
-                sort.as_api_str(),
-                cookies.as_ref(),
-            )?;
+            let data =
+                crate::api::comment::get_comments(aid, page, sort.as_api_str(), cookies.as_ref())?;
 
             if is_json() {
                 print_json(&data)?;
@@ -1105,10 +1127,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             print_spacer();
             print_section_header(
                 "视频评论",
-                Some(&format!(
-                    "第 {} 页 · 共 {} 条",
-                    page, data.page.acount
-                )),
+                Some(&format!("第 {} 页 · 共 {} 条", page, data.page.acount)),
             );
 
             if full {
@@ -1294,7 +1313,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     "success": true
                 }))?;
             } else {
-                user_success!("{}成功: {}", if cancel { "取消点赞" } else { "点赞" }, video);
+                user_success!(
+                    "{}成功: {}",
+                    if cancel { "取消点赞" } else { "点赞" },
+                    video
+                );
             }
         }
 
@@ -1319,7 +1342,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     "成功为 {} 投币 {} 枚{}",
                     video,
                     num,
-                    if also_like { "，并已同步点赞" } else { "" }
+                    if also_like {
+                        "，并已同步点赞"
+                    } else {
+                        ""
+                    }
                 );
             }
         }
@@ -1405,8 +1432,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     )?
                 };
 
-                let (dash_videos, dash_audios) =
-                    crate::api::video::parse_dash_streams(&playurl);
+                let (dash_videos, dash_audios) = crate::api::video::parse_dash_streams(&playurl);
                 let durls = crate::api::video::parse_durl_segments(&playurl);
 
                 let has_dash = !dash_videos.is_empty() || !dash_audios.is_empty();
@@ -1452,8 +1478,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                         chosen_codec = "audio".to_string();
                     }
 
-                    let need_mux =
-                        !audio_only && !video_only && !skip_mux && v_stream.is_some() && a_stream.is_some();
+                    let need_mux = !audio_only
+                        && !video_only
+                        && !skip_mux
+                        && v_stream.is_some()
+                        && a_stream.is_some();
 
                     // 在下载任何 DASH 流之前校验 ffmpeg 是否可用
                     let ffmpeg_bin = if need_mux {
@@ -1503,10 +1532,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                             }
                             crate::utils::interrupt::register_temp_path(v_tmp.path().to_path_buf());
                             crate::utils::interrupt::register_temp_path(a_tmp.path().to_path_buf());
-                            let _tmp_reg = TmpRegGuard(
-                                v_tmp.path().to_path_buf(),
-                                a_tmp.path().to_path_buf(),
-                            );
+                            let _tmp_reg =
+                                TmpRegGuard(v_tmp.path().to_path_buf(), a_tmp.path().to_path_buf());
 
                             user_info!(
                                 "下载 P{} 视频流 (qn={}, codec={})...",
@@ -1542,7 +1569,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                         (Some(vs), Some(aus), None) => {
                             // --skip-mux：分别保留原始视频流与音频流文件
                             let v_out = stem_sibling_path(&out_path, ".video.m4s");
-                            let a_out = stem_sibling_path(&out_path, &format!(".audio.{audio_ext}"));
+                            let a_out =
+                                stem_sibling_path(&out_path, &format!(".audio.{audio_ext}"));
                             ensure_parent_dir(&v_out)?;
 
                             user_info!("下载 P{} 视频流 -> {}", resolved.page, v_out.display());
@@ -1584,7 +1612,9 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                             page_files.push(out_path.display().to_string());
                         }
                         (None, None, _) => {
-                            return Err(BiliLiveError::Api("未找到可下载的 DASH 媒体流".to_string()));
+                            return Err(BiliLiveError::Api(
+                                "未找到可下载的 DASH 媒体流".to_string(),
+                            ));
                         }
                     }
                 } else if !durls.is_empty() {
@@ -1618,7 +1648,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                         page_files.push(out_path.display().to_string());
                     } else {
                         for (idx, seg) in durls.iter().enumerate() {
-                            let seg_path = stem_sibling_path(&out_path, &format!("_part{}.mp4", idx + 1));
+                            let seg_path =
+                                stem_sibling_path(&out_path, &format!("_part{}.mp4", idx + 1));
                             crate::api::video::download_binary_to_path(
                                 &seg.all_urls(),
                                 &referer,
@@ -1666,20 +1697,25 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     ) {
                         Ok(v2) => {
                             if let Some(tracks) = v2["subtitle"]["subtitles"].as_array()
-                                && let Some(track) = tracks
-                                    .iter()
-                                    .find(|t| !t["subtitle_url"].as_str().unwrap_or("").trim().is_empty())
+                                && let Some(track) = tracks.iter().find(|t| {
+                                    !t["subtitle_url"].as_str().unwrap_or("").trim().is_empty()
+                                })
                             {
                                 let sub_url = track["subtitle_url"].as_str().unwrap_or("");
                                 match crate::api::video::fetch_subtitle_json(sub_url) {
                                     Ok(sub_json) => {
-                                        let body =
-                                            sub_json["body"].as_array().cloned().unwrap_or_default();
+                                        let body = sub_json["body"]
+                                            .as_array()
+                                            .cloned()
+                                            .unwrap_or_default();
                                         let srt = render_subtitle_srt(&body);
                                         let sub_path = stem_sibling_path(&primary_path, ".srt");
-                                        if let Err(e) = ensure_parent_dir(&sub_path).and_then(|()| {
-                                            std::fs::write(&sub_path, srt.as_bytes()).map_err(Into::into)
-                                        }) {
+                                        if let Err(e) =
+                                            ensure_parent_dir(&sub_path).and_then(|()| {
+                                                std::fs::write(&sub_path, srt.as_bytes())
+                                                    .map_err(Into::into)
+                                            })
+                                        {
                                             user_warning!(
                                                 "保存 P{} 字幕失败，已跳过: {}",
                                                 resolved.page,
@@ -1708,7 +1744,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 }
 
                 if danmaku {
-                    let xml = crate::api::danmaku::fetch_danmaku_xml(resolved.cid, cookies.as_ref())?;
+                    let xml =
+                        crate::api::danmaku::fetch_danmaku_xml(resolved.cid, cookies.as_ref())?;
                     match danmaku_format {
                         DownloadDanmakuFormat::Ass => {
                             let dm_path = stem_sibling_path(&primary_path, ".ass");
@@ -1904,7 +1941,10 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                         },
                         Color::Green,
                     )
-                    .add_row("BV号", Cell::cyan(if bvid.is_empty() { "-" } else { &bvid }))
+                    .add_row(
+                        "BV号",
+                        Cell::cyan(if bvid.is_empty() { "-" } else { &bvid }),
+                    )
                     .add_plain_row("AV号", format!("av{aid}"))
                     .add_row("标题", Cell::bold_colored(&effective_title, Color::White))
                     .add_plain_row("分P数量", uploaded_parts.len().to_string())
@@ -2000,6 +2040,107 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             }
         }
 
+        VideoCommands::Replace {
+            video,
+            file,
+            part,
+            title,
+            line,
+            limit,
+        } => {
+            let m = std::fs::metadata(&file).map_err(|e| {
+                BiliLiveError::Input(format!("无法读取替换视频文件 '{}': {e}", file.display()))
+            })?;
+            if !m.is_file() || m.len() == 0 {
+                return Err(BiliLiveError::Input(format!(
+                    "无效或空的视频文件: {}",
+                    file.display()
+                )));
+            }
+            let new_title = title
+                .as_deref()
+                .map(crate::api::upload::validate_archive_title)
+                .transpose()?;
+
+            let cookies = crate::auth::ensure_csrf()?;
+            // 上传前先校验稿件可编辑、允许替换且分P存在，避免上传完才失败
+            let existing = crate::api::upload::get_studio_archive_view(&cookies, &video)?;
+            crate::api::upload::ensure_replace_allowed(&existing)?;
+            let arc = &existing["archive"];
+            let existing_title = arc["title"].as_str().unwrap_or(&video).to_string();
+            let bvid = arc["bvid"].as_str().unwrap_or(&video).to_string();
+            let parts = existing["videos"].as_array().map(|a| a.len()).unwrap_or(0);
+            let part_idx = part as usize;
+            if part_idx > parts {
+                return Err(BiliLiveError::Input(format!(
+                    "分P序号 {part} 超出范围（稿件共 {parts} P）"
+                )));
+            }
+            let part_title = existing["videos"][part_idx - 1]["title"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+
+            let mut prompt = format!(
+                "将《{existing_title}》({bvid}) 的 P{part}「{part_title}」替换为 {}",
+                file.display()
+            );
+            if let Some(t) = &new_title {
+                prompt.push_str(&format!("，并将标题改为《{t}》"));
+            }
+            prompt.push_str("。提交后稿件需重新审核，确认继续？");
+            if !crate::cli::output::confirm_action(&prompt)? {
+                user_warning!("已取消替换");
+                return Ok(());
+            }
+
+            let line_query = crate::api::upload::resolve_line_query(line);
+            user_info!(
+                "上传替换视频 -> 《{}》P{}: {}...",
+                existing_title,
+                part,
+                file.display()
+            );
+            let uploaded = crate::api::upload::upload_single_video_file(
+                &cookies,
+                &file,
+                Some(&part_title),
+                &line_query,
+                limit as usize,
+            )?;
+
+            let outcome = crate::api::upload::replace_archive_part(
+                &cookies,
+                &video,
+                part_idx,
+                &uploaded,
+                new_title.as_deref(),
+            )?;
+
+            if is_json() {
+                print_json(&json!({
+                    "success": true,
+                    "bvid": bvid,
+                    "aid": arc["aid"].as_i64().unwrap_or(0),
+                    "title": outcome.title,
+                    "title_changed": new_title.is_some(),
+                    "part": outcome.part,
+                    "total_parts": outcome.total_parts,
+                    "part_title": outcome.part_title,
+                    "old_filename": outcome.old_filename,
+                    "new_part": uploaded,
+                    "data": outcome.data,
+                }))?;
+            } else {
+                user_success!(
+                    "已替换稿件《{}》({}) 的 P{}，稿件将重新进入审核",
+                    outcome.title,
+                    bvid,
+                    outcome.part
+                );
+            }
+        }
+
         VideoCommands::Studio(sub) => match sub {
             VideoStudioCommands::List {
                 status,
@@ -2048,7 +2189,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                                 let state_desc = arc["state_desc"]
                                     .as_str()
                                     .filter(|s| !s.is_empty())
-                                    .unwrap_or(if state >= 0 { "已通过" } else { "审核/退回" });
+                                    .unwrap_or(if state >= 0 {
+                                        "已通过"
+                                    } else {
+                                        "审核/退回"
+                                    });
                                 let state_cell = if state >= 0 {
                                     Cell::colored(state_desc, Color::Green)
                                 } else if state == -30 || state == -6 {
@@ -2096,7 +2241,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 let state_desc = arc["state_desc"]
                     .as_str()
                     .filter(|s| !s.is_empty())
-                    .unwrap_or(if state >= 0 { "正常开放" } else { "处理中/受限" });
+                    .unwrap_or(if state >= 0 {
+                        "正常开放"
+                    } else {
+                        "处理中/受限"
+                    });
                 let reject = arc["reject_reason"].as_str().unwrap_or("").trim();
                 let tid = arc["tid"].as_i64().unwrap_or(0);
                 let tag = arc["tag"].as_str().unwrap_or("-");
@@ -2121,7 +2270,10 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 if let Some(videos) = data["videos"].as_array()
                     && !videos.is_empty()
                 {
-                    print_section_header("分P转码与审核明细", Some(&format!("共 {} P", videos.len())));
+                    print_section_header(
+                        "分P转码与审核明细",
+                        Some(&format!("共 {} P", videos.len())),
+                    );
                     let cols = [
                         Column::right("P", 4),
                         Column::left("分P标题", 26),
@@ -2205,7 +2357,11 @@ fn parse_relative_secs(s: &str) -> Result<u64> {
                 'h' => 3_600,
                 'm' => 60,
                 's' => 1,
-                _ => return Err(BiliLiveError::Input(format!("不支持的时长单位 '{ch}' (支持 d/h/m/s)"))),
+                _ => {
+                    return Err(BiliLiveError::Input(format!(
+                        "不支持的时长单位 '{ch}' (支持 d/h/m/s)"
+                    )));
+                }
             };
             total = total.saturating_add(n.saturating_mul(mult));
         }
@@ -2279,20 +2435,11 @@ mod tests {
             "mp4",
             true,
         );
-        assert_eq!(
-            out,
-            PathBuf::from("/tmp/dl/A_B_C______test_p2.mp4")
-        );
+        assert_eq!(out, PathBuf::from("/tmp/dl/A_B_C______test_p2.mp4"));
 
         // Multi-page fixed template auto-appends _p{page}
-        let fixed_multi = expand_output_template(
-            Some("/tmp/dl/out.mp4"),
-            &resolved,
-            80,
-            "avc",
-            "mp4",
-            true,
-        );
+        let fixed_multi =
+            expand_output_template(Some("/tmp/dl/out.mp4"), &resolved, 80, "avc", "mp4", true);
         assert_eq!(fixed_multi, PathBuf::from("/tmp/dl/out_p2.mp4"));
 
         // Extensionless template with dots inside {title} preserves title intact

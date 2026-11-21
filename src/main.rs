@@ -7,8 +7,8 @@ mod logger;
 mod ui;
 mod utils;
 
-use clap::{CommandFactory, FromArgMatches};
 use clap::error::ErrorKind;
+use clap::{CommandFactory, FromArgMatches};
 use crossterm::style::Stylize;
 use logger::init_logger;
 
@@ -69,10 +69,7 @@ fn scan_raw_args(args: &[String]) -> RawArgsSummary {
                         'u' => {
                             if chars.as_str().is_empty()
                                 && let Some(next) = args.get(i + 1)
-                                && !matches!(
-                                    next.as_str(),
-                                    "-h" | "--help" | "-V" | "--version"
-                                )
+                                && !matches!(next.as_str(), "-h" | "--help" | "-V" | "--version")
                             {
                                 i += 1;
                             }
@@ -126,7 +123,10 @@ fn main() {
         cmd = cmd.color(clap::ColorChoice::Never);
     }
 
-    let cli = match cmd.try_get_matches().and_then(|m| cli::Cli::from_arg_matches(&m)) {
+    let cli = match cmd
+        .try_get_matches()
+        .and_then(|m| cli::Cli::from_arg_matches(&m))
+    {
         Ok(cli) => cli,
         Err(err) => match err.kind() {
             ErrorKind::DisplayHelp => {

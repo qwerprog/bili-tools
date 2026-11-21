@@ -4,8 +4,7 @@ use crate::error::Result;
 
 pub fn handle_feed(feed_type: FeedType, offset: Option<String>) -> Result<()> {
     let cookies = crate::auth::ensure_login()?;
-    let data =
-        crate::api::user::get_feed(&cookies, feed_type.as_api_str(), offset.as_deref())?;
+    let data = crate::api::user::get_feed(&cookies, feed_type.as_api_str(), offset.as_deref())?;
 
     if is_json() {
         print_json(&data)?;

@@ -81,7 +81,11 @@ pub fn detect_physical_ipv4() -> Option<(String, Ipv4Addr)> {
 }
 
 #[cfg(unix)]
-fn connect_tcp_bound_ipv4(local_ip: Ipv4Addr, remote: SocketAddr, timeout: Duration) -> std::io::Result<TcpStream> {
+fn connect_tcp_bound_ipv4(
+    local_ip: Ipv4Addr,
+    remote: SocketAddr,
+    timeout: Duration,
+) -> std::io::Result<TcpStream> {
     // 使用临时文件描述符 / libc 或标准库？Rust std::net::TcpStream 无 bind_before_connect，
     // 但 Linux 下仅需通过 python/socket？不，我们直接用纯安全 Rust? 注意 Cargo.toml 没有 socket2/libc，
     // 而 IPv6 在本机原生直连无需 bind！当回退 IPv4 时直接 TcpStream::connect_timeout 兜底即可。
@@ -90,7 +94,11 @@ fn connect_tcp_bound_ipv4(local_ip: Ipv4Addr, remote: SocketAddr, timeout: Durat
 }
 
 #[cfg(not(unix))]
-fn connect_tcp_bound_ipv4(_local_ip: Ipv4Addr, remote: SocketAddr, timeout: Duration) -> std::io::Result<TcpStream> {
+fn connect_tcp_bound_ipv4(
+    _local_ip: Ipv4Addr,
+    remote: SocketAddr,
+    timeout: Duration,
+) -> std::io::Result<TcpStream> {
     TcpStream::connect_timeout(&remote, timeout)
 }
 
@@ -180,7 +188,9 @@ fn perform_raw_https_over_ip(
         .split_whitespace()
         .nth(1)
         .and_then(|s| s.parse::<u16>().ok())
-        .ok_or_else(|| BiliLiveError::Parse(format!("无法解析 HTTP 状态行: {}", status_line.trim())))?;
+        .ok_or_else(|| {
+            BiliLiveError::Parse(format!("无法解析 HTTP 状态行: {}", status_line.trim()))
+        })?;
 
     let mut is_chunked = false;
     let mut content_len: Option<usize> = None;
@@ -237,7 +247,8 @@ pub fn resolve_real_ips_via_doh(host: &str, record_type: u16) -> Vec<IpAddr> {
     ];
 
     for &(dns_ip, sni) in providers {
-        if let Ok((200, body)) = perform_raw_https_over_ip(dns_ip, 443, sni, "GET", &path, &[], None)
+        if let Ok((200, body)) =
+            perform_raw_https_over_ip(dns_ip, 443, sni, "GET", &path, &[], None)
             && let Ok(v) = serde_json::from_str::<Value>(&body)
             && let Some(answers) = v["Answer"].as_array()
         {

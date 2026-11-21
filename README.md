@@ -47,9 +47,9 @@ winget install QwerProg.bili-tools
 ### 手动下载预编译包 (Releases)
 
 前往 [GitHub Releases](https://github.com/qwerprog/bili-tools/releases) 下载对应平台的预编译压缩包（解压即用）：
-- **Windows**: `bit-v1.0.2-windows-amd64.zip` / `bit-v1.0.2-windows-arm64.zip`
-- **macOS**: `bit-v1.0.2-darwin-arm64.zip` / `bit-v1.0.2-darwin-amd64.zip`
-- **Linux**: `bit-v1.0.2-linux-amd64.tar.gz` / `bit-v1.0.2-linux-arm64.tar.gz`
+- **Windows**: `bit-v1.0.3-windows-amd64.zip` / `bit-v1.0.3-windows-arm64.zip`
+- **macOS**: `bit-v1.0.3-darwin-arm64.zip` / `bit-v1.0.3-darwin-amd64.zip`
+- **Linux**: `bit-v1.0.3-linux-amd64.tar.gz` / `bit-v1.0.3-linux-arm64.tar.gz`
 
 ### Cargo (源码编译)
 
@@ -119,6 +119,7 @@ bit video triple BV1hp4y1k7SV               # 一键三连
 bit video download BV1hp4y1k7SV -p 1 -Q 80 -e hevc --danmaku --subtitle --cover
 bit video upload a.mp4 --title "演示" --tid 171 --tag "工具,CLI" # UPOS 投稿（支持多 P / --line）
 bit video append <BVID> b.mp4               # 向已有稿件追加分 P
+bit video replace <BVID> new.mp4 -t "新标题" # 替换稿件视频文件（保留 BV 号，可同时改标题，需重新审核）
 bit video studio ls                         # 查看创作中心个人稿件列表
 
 # 用户主页、动态与榜单
@@ -171,7 +172,7 @@ Commands:
   auth         账号与认证管理 (login, status, logout, refresh, daily)
   live         直播间管理、拉流、聊天与录制 (start, stop, status, info, title, area, following, stream, danmaku, chat, send, record)
   search       内容与用户搜索 (video, user, live, hot)
-  video        视频操作、下载与投稿 (info, streams, subtitle, summary, tags, related, danmaku, comments, comment, like, coin, triple, download, upload, append, studio)
+  video        视频操作、下载与投稿 (info, streams, subtitle, summary, tags, related, danmaku, comments, comment, like, coin, triple, download, upload, append, replace, studio)
   user         用户主页、投稿与关系管理 (info, videos, dynamics, follow, unfollow)
   feed         查看已关注 UP 主动态流
   rank         全站视频排行榜与综合热门 (video, popular)

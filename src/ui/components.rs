@@ -1,4 +1,6 @@
-use crate::ui::theme::{BILI_CYAN, BILI_PINK, color_enabled, muted, paint, paint_bold, terminal_width};
+use crate::ui::theme::{
+    BILI_CYAN, BILI_PINK, color_enabled, muted, paint, paint_bold, terminal_width,
+};
 use crate::utils::string::{display_width, truncate_to_width};
 use crossterm::style::Color;
 use unicode_width::UnicodeWidthChar;
@@ -165,7 +167,9 @@ impl InfoCard {
             + 4;
 
         // 内部内容区宽度（不含左右边框 `│ ` 和 ` │`）
-        let desired_inner = (label_width + 3 + max_val_width).max(header_plain_width).max(38);
+        let desired_inner = (label_width + 3 + max_val_width)
+            .max(header_plain_width)
+            .max(38);
         let cap_inner = max_term_width.saturating_sub(6).max(30);
         let inner_width = desired_inner.min(cap_inner).max(label_width + 3 + 8);
         let val_width = inner_width.saturating_sub(label_width + 3).max(8);
@@ -313,7 +317,11 @@ pub fn print_section_header(title: &str, subtitle: Option<&str>) {
     let title_styled = paint_bold(title, Color::White);
     match subtitle {
         Some(sub) if !sub.is_empty() => {
-            let _ = writeln!(stdout, "  {icon} {title_styled}  {}", muted(&format!("({sub})")));
+            let _ = writeln!(
+                stdout,
+                "  {icon} {title_styled}  {}",
+                muted(&format!("({sub})"))
+            );
         }
         _ => {
             let _ = writeln!(stdout, "  {icon} {title_styled}");
@@ -374,11 +382,7 @@ pub fn print_table(columns: &[Column], rows: &[Vec<Cell>]) {
         .iter()
         .zip(effective_widths.iter())
         .map(|(col, &w)| {
-            Cell::bold_colored(col.header, BILI_PINK).render_padded(
-                w,
-                col.align,
-                enable_color,
-            )
+            Cell::bold_colored(col.header, BILI_PINK).render_padded(w, col.align, enable_color)
         })
         .collect();
     if writeln!(stdout, "  {}", header_cells.join("  ")).is_err() {
@@ -388,7 +392,13 @@ pub fn print_table(columns: &[Column], rows: &[Vec<Cell>]) {
     // 细横线分隔符
     let rule_width: usize =
         effective_widths.iter().sum::<usize>() + columns.len().saturating_sub(1) * 2;
-    if writeln!(stdout, "  {}", paint(&"─".repeat(rule_width), Color::DarkGrey)).is_err() {
+    if writeln!(
+        stdout,
+        "  {}",
+        paint(&"─".repeat(rule_width), Color::DarkGrey)
+    )
+    .is_err()
+    {
         return;
     }
 
@@ -444,9 +454,7 @@ pub fn render_countdown_bar(elapsed_secs: u64, total_secs: u64, enable_color: bo
             "(Ctrl+C 取消)".dark_grey()
         )
     } else {
-        format!(
-            "  ⏳ 定时下播 [{filled_bar}{empty_bar}] {pct:>3}%  剩余 {time_str}  (Ctrl+C 取消)"
-        )
+        format!("  ⏳ 定时下播 [{filled_bar}{empty_bar}] {pct:>3}%  剩余 {time_str}  (Ctrl+C 取消)")
     }
 }
 
@@ -477,7 +485,10 @@ mod tests {
 
         let rendered = card.render(80, false);
         let widths: Vec<usize> = rendered.lines().map(display_width).collect();
-        assert!(widths.windows(2).all(|w| w[0] == w[1]), "widths={widths:?}\n{rendered}");
+        assert!(
+            widths.windows(2).all(|w| w[0] == w[1]),
+            "widths={widths:?}\n{rendered}"
+        );
     }
 
     #[test]

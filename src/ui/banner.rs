@@ -184,18 +184,48 @@ pub(crate) fn render_welcome_help(cols: usize, color: bool) -> String {
 
     let _ = writeln!(out, "  {}", heading("核心模块 Commands"));
     let commands = [
-        ("resolve", "通用标识解析（BV / AV / EP / SS / MD / 各类 URL / b23.tv 短链接）"),
-        ("auth", "账号认证管理（登录 / 状态 / 刷新 Cookie / 每日经验与直播签到）"),
-        ("live", "直播间场控与互动（开播 / 下播 / 弹幕聊天室 / 拉流 / 录制）"),
-        ("search", "全站搜索与榜单（实时热搜榜 / 搜索视频 / 用户 / 直播间）"),
-        ("video", "视频全链路操作（详情 / 流 / 字幕 / 总结 / 弹幕 / 评论 / 下载 / 互动）"),
-        ("user", "用户主页与关系（用户详情 / 投稿列表 / 空间动态 / 关注与取关）"),
-        ("feed", "关注动态时间线（支持全部 / 视频 / 番剧 / 专栏筛选与游标翻页）"),
+        (
+            "resolve",
+            "通用标识解析（BV / AV / EP / SS / MD / 各类 URL / b23.tv 短链接）",
+        ),
+        (
+            "auth",
+            "账号认证管理（登录 / 状态 / 刷新 Cookie / 每日经验与直播签到）",
+        ),
+        (
+            "live",
+            "直播间场控与互动（开播 / 下播 / 弹幕聊天室 / 拉流 / 录制）",
+        ),
+        (
+            "search",
+            "全站搜索与榜单（实时热搜榜 / 搜索视频 / 用户 / 直播间）",
+        ),
+        (
+            "video",
+            "视频全链路操作（详情 / 流 / 字幕 / 总结 / 弹幕 / 评论 / 下载 / 互动）",
+        ),
+        (
+            "user",
+            "用户主页与关系（用户详情 / 投稿列表 / 空间动态 / 关注与取关）",
+        ),
+        (
+            "feed",
+            "关注动态时间线（支持全部 / 视频 / 番剧 / 专栏筛选与游标翻页）",
+        ),
         ("rank", "全站排行榜与热门（分区视频榜 / 综合热门视频）"),
-        ("fav", "收藏夹管理（列表 / 浏览 / 导出 / 增删视频 / 清理失效 / 新建与删除）"),
+        (
+            "fav",
+            "收藏夹管理（列表 / 浏览 / 导出 / 增删视频 / 清理失效 / 新建与删除）",
+        ),
         ("later", "稍后再看管理（列表 / 添加 / 移除 / 清理已观看）"),
-        ("history", "观看历史记录（支持 -c 按视频 / 直播 / 专栏筛选与单条/清空删除）"),
-        ("completions", "生成并安装 Bash / Zsh / Fish / PowerShell / Elvish 补全脚本"),
+        (
+            "history",
+            "观看历史记录（支持 -c 按视频 / 直播 / 专栏筛选与单条/清空删除）",
+        ),
+        (
+            "completions",
+            "生成并安装 Bash / Zsh / Fish / PowerShell / Elvish 补全脚本",
+        ),
     ];
     for (name, desc) in commands {
         let _ = writeln!(out, "    {}  {}", cmd_style(name, 13), desc);
@@ -204,7 +234,10 @@ pub(crate) fn render_welcome_help(cols: usize, color: bool) -> String {
 
     let _ = writeln!(out, "  {}", heading("全局选项 Global Options"));
     let flags = [
-        ("--json", "以结构化 JSON 输出结果（便于脚本与 AI Agent 调用）"),
+        (
+            "--json",
+            "以结构化 JSON 输出结果（便于脚本与 AI Agent 调用）",
+        ),
         ("-q, --quiet", "静默模式，隐藏装饰与过程提示信息"),
         ("-y, --yes", "自动确认交互式或危险操作"),
         ("--no-color", "禁用终端彩色输出（等价于 NO_COLOR=1）"),
@@ -220,10 +253,22 @@ pub(crate) fn render_welcome_help(cols: usize, color: bool) -> String {
     let _ = writeln!(out, "  {}", heading("快捷示例 Quick Start"));
     let examples = [
         ("bit auth login", "终端扫码登录 B 站账号"),
-        ("bit live start", "交互式选择分区与标题并一键获取 OBS 推流码"),
-        ("bit live chat", "打开看发一体的终端实时直播弹幕聊天室 (TUI)"),
-        ("bit video download BV1xx...", "下载视频与弹幕字幕（DASH 混流需 ffmpeg）"),
-        ("bit user info 293793435", "查看指定 UP 主主页信息与粉丝数据"),
+        (
+            "bit live start",
+            "交互式选择分区与标题并一键获取 OBS 推流码",
+        ),
+        (
+            "bit live chat",
+            "打开看发一体的终端实时直播弹幕聊天室 (TUI)",
+        ),
+        (
+            "bit video download BV1xx...",
+            "下载视频与弹幕字幕（DASH 混流需 ffmpeg）",
+        ),
+        (
+            "bit user info 293793435",
+            "查看指定 UP 主主页信息与粉丝数据",
+        ),
         ("bit rank popular", "查看 B 站当前综合热门视频"),
         ("bit search hot", "查看 B 站实时热搜榜单"),
     ];
@@ -304,7 +349,10 @@ mod tests {
             "history",
             "completions",
         ] {
-            assert!(help.contains(module), "missing module {module} in welcome help");
+            assert!(
+                help.contains(module),
+                "missing module {module} in welcome help"
+            );
         }
         assert!(help.contains("--json"));
         assert!(help.contains("--cookie-file"));
