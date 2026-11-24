@@ -62,6 +62,14 @@ cargo install --path .
 
 编译安装到 `~/.cargo/bin/bit`，确认该目录在 PATH 中即可。
 
+### Antigravity AI Agent 插件
+
+```bash
+agy plugin install https://github.com/qwerprog/bili-tools/tree/main/plugins/bili-tools
+```
+
+安装后即可让 Antigravity AI Agent 通过 `bit --json` 安全地检索与总结 B 站视频/番剧、读取或管理评论与楼中楼、下载音视频及弹幕字幕、投稿与管理稿件、整理收藏夹/稍后再看/观看历史以及控制直播与 24/7 录播，同时内置凭据保护、海外代理自动切换 `-D` 直连与高危写操作二次确认护栏。
+
 ## 快速使用
 
 ```bash
@@ -157,9 +165,6 @@ bit -u /tmp/alt.json auth status            # 指定自定义 Cookie 文件路�
 
 # Shell 补全
 bit completions --install                   # 自动识别当前 Shell 并安装补全（也支持指定 bash/zsh/fish/powershell/elvish）
-
-# Antigravity AI Agent 插件
-agy plugin install https://github.com/qwerprog/bili-tools/tree/main/plugins/bili-tools
 ```
 
 ### 命令架构
