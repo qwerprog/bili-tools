@@ -2,7 +2,7 @@ use crate::auth::cookies::Cookies;
 use crate::cli::output::{is_json, is_quiet};
 use crate::error::{BiliLiveError, Result};
 use crate::live::ws::{InteractKind, LiveEvent, now_hhmmss, spawn_live_ws_listener};
-use crate::ui::components::wrap_to_width;
+use crate::ui::components::{slice_input_window, wrap_to_width};
 use crate::ui::theme::{BILI_CYAN, BILI_PINK, color_enabled};
 use crate::utils::string::{display_width, pad_to_width, truncate_to_width};
 use crossterm::cursor::{Hide, MoveTo, Show};
@@ -1273,45 +1273,6 @@ fn render_tui_frame(state: RenderState<'_>) -> Result<()> {
     queue!(stdout, MoveTo(cursor_x, input_row_y), Show).map_err(BiliLiveError::Io)?;
     stdout.flush().map_err(BiliLiveError::Io)?;
     Ok(())
-}
-
-fn slice_input_window(chars: &[char], cursor_idx: usize, max_cols: usize) -> (String, usize) {
-    if chars.is_empty() {
-        return (String::new(), 0);
-    }
-    let cursor_idx = cursor_idx.min(chars.len());
-    let mut start = 0usize;
-
-    // 保证 start..cursor_idx 的显示列宽不超过 max_cols
-    loop {
-        let w: usize = chars[start..cursor_idx]
-            .iter()
-            .map(|c| unicode_width::UnicodeWidthChar::width(*c).unwrap_or(0))
-            .sum();
-        if w <= max_cols.saturating_sub(2) || start >= cursor_idx {
-            break;
-        }
-        start += 1;
-    }
-
-    let mut out = String::new();
-    let mut used = 0usize;
-    let mut cursor_col = 0usize;
-    for (i, &ch) in chars[start..].iter().enumerate() {
-        let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-        if used + cw > max_cols {
-            break;
-        }
-        if start + i == cursor_idx {
-            cursor_col = used;
-        }
-        out.push(ch);
-        used += cw;
-    }
-    if cursor_idx >= start + out.chars().count() {
-        cursor_col = used;
-    }
-    (out, cursor_col)
 }
 
 fn build_plain_badge(guard_level: u8, is_admin: bool, medal: Option<&(String, u32)>) -> String {

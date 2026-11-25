@@ -36,6 +36,46 @@ pub fn wrap_to_width(s: &str, max_width: usize) -> Vec<String> {
     lines
 }
 
+/// 计算水平滚动输入窗口可见文本与光标列偏移（保证多字节中文下光标始终可见）
+pub fn slice_input_window(chars: &[char], cursor_idx: usize, max_cols: usize) -> (String, usize) {
+    if chars.is_empty() {
+        return (String::new(), 0);
+    }
+    let cursor_idx = cursor_idx.min(chars.len());
+    let mut start = 0usize;
+
+    // 保证 start..cursor_idx 的显示列宽不超过 max_cols
+    loop {
+        let w: usize = chars[start..cursor_idx]
+            .iter()
+            .map(|c| UnicodeWidthChar::width(*c).unwrap_or(0))
+            .sum();
+        if w <= max_cols.saturating_sub(2) || start >= cursor_idx {
+            break;
+        }
+        start += 1;
+    }
+
+    let mut out = String::new();
+    let mut used = 0usize;
+    let mut cursor_col = 0usize;
+    for (i, &ch) in chars[start..].iter().enumerate() {
+        let cw = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + cw > max_cols {
+            break;
+        }
+        if start + i == cursor_idx {
+            cursor_col = used;
+        }
+        out.push(ch);
+        used += cw;
+    }
+    if cursor_idx >= start + out.chars().count() {
+        cursor_col = used;
+    }
+    (out, cursor_col)
+}
+
 /// 单元格对齐方式
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Align {
