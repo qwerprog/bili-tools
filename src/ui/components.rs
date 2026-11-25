@@ -76,6 +76,89 @@ pub fn slice_input_window(chars: &[char], cursor_idx: usize, max_cols: usize) ->
     (out, cursor_col)
 }
 
+/// 计算含 ANSI CSI 转义序列文本的可见终端列宽
+pub fn display_width_ansi(s: &str) -> usize {
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    let mut width = 0usize;
+
+    while i < bytes.len() {
+        if bytes[i] == 0x1b && bytes.get(i + 1) == Some(&b'[') {
+            i += 2;
+            while i < bytes.len() {
+                let b = bytes[i];
+                i += 1;
+                if (0x40..=0x7E).contains(&b) {
+                    break;
+                }
+            }
+            continue;
+        }
+        let ch = s[i..].chars().next().unwrap();
+        width += UnicodeWidthChar::width(ch).unwrap_or(0);
+        i += ch.len_utf8();
+    }
+
+    width
+}
+
+/// 按可见终端列宽安全截断含 ANSI CSI 序列的字符串，保留转义序列完整并在截断处补全 `…` 与重置序列
+pub fn truncate_ansi_to_width(s: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+    if display_width_ansi(s) <= max_width {
+        return s.to_string();
+    }
+
+    let target = max_width.saturating_sub(1);
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    let mut used = 0usize;
+    let mut saw_ansi = false;
+    let mut out = String::with_capacity(s.len() + 8);
+
+    while i < bytes.len() {
+        if bytes[i] == 0x1b && bytes.get(i + 1) == Some(&b'[') {
+            saw_ansi = true;
+            let start = i;
+            i += 2;
+            while i < bytes.len() {
+                let b = bytes[i];
+                i += 1;
+                if (0x40..=0x7E).contains(&b) {
+                    break;
+                }
+            }
+            out.push_str(&s[start..i]);
+            continue;
+        }
+        let ch = s[i..].chars().next().unwrap();
+        let cw = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + cw > target {
+            break;
+        }
+        out.push(ch);
+        used += cw;
+        i += ch.len_utf8();
+    }
+
+    out.push('…');
+    if saw_ansi {
+        out.push_str("\x1b[0m");
+    }
+    out
+}
+
+/// 为整行内容施加全宽背景高亮，同时在内嵌 `\x1b[0m` 重置后自动重新注入背景色，避免局部徽标打断高亮条
+pub fn apply_selection_bg(line: &str, cols: usize, bg_sgr: &str) -> String {
+    let truncated = truncate_ansi_to_width(line, cols);
+    let vis_w = display_width_ansi(&truncated);
+    let pad = cols.saturating_sub(vis_w);
+    let rebg = truncated.replace("\x1b[0m", &format!("\x1b[0m{bg_sgr}"));
+    format!("{bg_sgr}{rebg}{}\x1b[0m", " ".repeat(pad))
+}
+
 /// 单元格对齐方式
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Align {
@@ -560,5 +643,36 @@ mod tests {
         let total = 2 + adapted.iter().sum::<usize>() + (cols.len() - 1) * 2;
         assert_eq!(total, 80);
         assert_eq!(adapted[0], 6); // 窄列保持不变
+    }
+
+    #[test]
+    fn ansi_width_truncation_and_selection_bg_never_slice_escapes() {
+        use crossterm::style::Stylize;
+
+        let styled = format!(
+            " {} {} {}",
+            "QwerProg".with(BILI_PINK).bold(),
+            "[UP]".with(BILI_CYAN).bold(),
+            "这是一段很长的中文测试内容用于验证ANSI截断".dark_grey()
+        );
+
+        let full_w = display_width_ansi(&styled);
+        assert_eq!(
+            full_w,
+            display_width(" QwerProg [UP] 这是一段很长的中文测试内容用于验证ANSI截断")
+        );
+
+        let truncated = truncate_ansi_to_width(&styled, 24);
+        assert!(display_width_ansi(&truncated) <= 24);
+        assert!(truncated.contains('…'));
+        assert!(truncated.ends_with("\x1b[0m"));
+        assert!(!truncated.contains('\u{FFFD}'));
+
+        let bg = "\x1b[48;2;46;52;68m";
+        let highlighted = apply_selection_bg(&styled, 30, bg);
+        assert!(highlighted.starts_with(bg));
+        assert!(highlighted.ends_with("\x1b[0m"));
+        assert_eq!(display_width_ansi(&highlighted), 30);
+        assert!(highlighted.contains(&format!("\x1b[0m{bg}")));
     }
 }

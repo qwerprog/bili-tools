@@ -1019,9 +1019,24 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             root,
             full,
             compact,
+            interactive,
             raw,
         } => {
             let _ = full;
+            if interactive {
+                use std::io::IsTerminal;
+                if is_json() {
+                    return Err(BiliLiveError::Input(
+                        "交互式评论浏览器不支持 --json 模式；请移除 --json 或改用默认输出"
+                            .to_string(),
+                    ));
+                }
+                if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+                    return Err(BiliLiveError::Input(
+                        "交互式评论浏览器需要交互式终端 (TTY)；管道环境请移除 -i".to_string(),
+                    ));
+                }
+            }
             if raw && !is_json() {
                 return Err(BiliLiveError::Input(
                     "--raw 仅支持配合 --json 使用".to_string(),
@@ -1029,6 +1044,43 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             }
 
             let cookies = crate::auth::cookies::read_cookies().ok();
+            if interactive {
+                let (aid, video_label, video_title) =
+                    match crate::api::video::resolve_video_context(&video, cookies.as_ref()) {
+                        Ok((_, info)) => {
+                            let aid = info["aid"].as_i64().unwrap_or(0);
+                            let aid = if aid > 0 {
+                                aid
+                            } else {
+                                crate::api::video::resolve_video_aid(&video, cookies.as_ref())?
+                            };
+                            let bvid = info["bvid"]
+                                .as_str()
+                                .filter(|s| !s.is_empty())
+                                .unwrap_or(&video)
+                                .to_string();
+                            let title = info["title"].as_str().unwrap_or("").to_string();
+                            (aid, bvid, title)
+                        }
+                        Err(_) => {
+                            let aid =
+                                crate::api::video::resolve_video_aid(&video, cookies.as_ref())?;
+                            (aid, video.clone(), String::new())
+                        }
+                    };
+                return crate::ui::comment_tui::run_comment_tui(
+                    crate::ui::comment_tui::CommentTuiContext {
+                        aid,
+                        video_label,
+                        video_title,
+                        initial_sort: sort,
+                        initial_page: page,
+                        initial_root: root,
+                        cookies,
+                    },
+                );
+            }
+
             let aid = crate::api::video::resolve_video_aid(&video, cookies.as_ref())?;
 
             if let Some(root_rpid) = root {

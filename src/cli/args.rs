@@ -754,7 +754,7 @@ pub enum VideoCommands {
         output: Option<PathBuf>,
     },
 
-    /// 查看视频评论列表（默认多行树状排版，支持 --compact / --root 楼中楼）
+    /// 查看视频评论列表（默认多行树状排版，支持 --compact / -i 交互浏览 / --root 楼中楼）
     #[command(visible_alias = "replies")]
     Comments {
         /// 视频 BV号、AV号、番剧 ep/ss、URL 或 b23.tv 短链接
@@ -777,8 +777,12 @@ pub enum VideoCommands {
         full: bool,
 
         /// 使用紧凑单行表格模式显示评论列表（截断长内容）
-        #[arg(long, conflicts_with = "full")]
+        #[arg(long, conflicts_with_all = ["full", "interactive"])]
         compact: bool,
+
+        /// 启动终端交互式评论浏览器 (TUI，支持浏览、展开楼中楼、翻页、点赞与回复)
+        #[arg(short = 'i', long, conflicts_with_all = ["compact", "raw"])]
+        interactive: bool,
 
         /// 配合 --json 返回 B 站原始未精简接口数据（含头像图层、装扮等冗余字段）
         #[arg(long)]
@@ -2161,6 +2165,16 @@ mod tests {
             ])
             .is_ok()
         );
+        let c_tui = Cli::try_parse_from(["bit", "video", "comments", "BV1xx", "-i"]).unwrap();
+        assert!(matches!(
+            c_tui.command,
+            Some(Commands::Video(VideoCommands::Comments {
+                interactive: true,
+                compact: false,
+                raw: false,
+                ..
+            }))
+        ));
         let c_cmp =
             Cli::try_parse_from(["bit", "video", "comments", "BV1xx", "--compact"]).unwrap();
         assert!(matches!(
@@ -2181,5 +2195,9 @@ mod tests {
             Cli::try_parse_from(["bit", "video", "comments", "BV1xx", "--compact", "--full"])
                 .is_err()
         );
+        assert!(
+            Cli::try_parse_from(["bit", "video", "comments", "BV1xx", "--compact", "-i"]).is_err()
+        );
+        assert!(Cli::try_parse_from(["bit", "video", "comments", "BV1xx", "-i", "--raw"]).is_err());
     }
 }
