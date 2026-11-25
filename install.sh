@@ -2,7 +2,7 @@
 # bili-tools (bit) - Standalone installer for Linux & macOS
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/qwerprog/bili-tools/main/install.sh | bash
-#   BIT_VERSION=v1.0.3 curl -fsSL ... | bash
+#   BIT_VERSION=v1.0.4 curl -fsSL ... | bash
 
 set -euo pipefail
 
@@ -78,7 +78,7 @@ else
         TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)"
     fi
     if [ -z "$TAG" ]; then
-        error "无法获取最新版本号，您可以通过指定环境变量安装：BIT_VERSION=v1.0.3 bash install.sh"
+        error "无法获取最新版本号，您可以通过指定环境变量安装：BIT_VERSION=v1.0.4 bash install.sh"
     fi
     VERSION="$TAG"
 fi

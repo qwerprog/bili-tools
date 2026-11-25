@@ -1,7 +1,7 @@
 ﻿# bili-tools (bit) - Standalone installer for Windows
 # Usage in PowerShell:
 #   irm https://raw.githubusercontent.com/qwerprog/bili-tools/main/install.ps1 | iex
-#   $env:BIT_VERSION="v1.0.3"; irm https://raw.githubusercontent.com/qwerprog/bili-tools/main/install.ps1 | iex
+#   $env:BIT_VERSION="v1.0.4"; irm https://raw.githubusercontent.com/qwerprog/bili-tools/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
@@ -51,7 +51,7 @@ if (-not $version) {
             $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -Headers @{ "User-Agent" = "bili-tools-installer" }
             $version = $release.tag_name
         } catch {
-            throw "无法获取最新版本号，请指定版本安装，例如: `$env:BIT_VERSION='v1.0.3'; irm ... | iex"
+            throw "无法获取最新版本号，请指定版本安装，例如: `$env:BIT_VERSION='v1.0.4'; irm ... | iex"
         }
     }
 }

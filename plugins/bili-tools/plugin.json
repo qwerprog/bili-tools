@@ -1,6 +1,6 @@
 {
   "name": "bili-tools",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Antigravity plugin for operating Bilibili via the bit CLI (videos, bangumi, comments, upload, live streaming & recording).",
   "logo": "assets/logo.svg",
   "author": {

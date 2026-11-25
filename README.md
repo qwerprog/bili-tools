@@ -47,9 +47,9 @@ winget install QwerProg.bili-tools
 ### 手动下载预编译包 (Releases)
 
 前往 [GitHub Releases](https://github.com/qwerprog/bili-tools/releases) 下载对应平台的预编译压缩包（解压即用）：
-- **Windows**: `bit-v1.0.3-windows-amd64.zip` / `bit-v1.0.3-windows-arm64.zip`
-- **macOS**: `bit-v1.0.3-darwin-arm64.zip` / `bit-v1.0.3-darwin-amd64.zip`
-- **Linux**: `bit-v1.0.3-linux-amd64.tar.gz` / `bit-v1.0.3-linux-arm64.tar.gz`
+- **Windows**: `bit-v1.0.4-windows-amd64.zip` / `bit-v1.0.4-windows-arm64.zip`
+- **macOS**: `bit-v1.0.4-darwin-arm64.zip` / `bit-v1.0.4-darwin-amd64.zip`
+- **Linux**: `bit-v1.0.4-linux-amd64.tar.gz` / `bit-v1.0.4-linux-arm64.tar.gz`
 
 ### Cargo (源码编译)
 
