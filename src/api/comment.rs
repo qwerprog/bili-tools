@@ -2,7 +2,7 @@ use crate::api::client::DEFAULT_USER_AGENT;
 use crate::auth::cookies::Cookies;
 use crate::error::{BiliLiveError, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 fn deserialize_null_default<'de, D, T>(deserializer: D) -> std::result::Result<T, D::Error>
 where
@@ -11,6 +11,26 @@ where
 {
     let opt = Option::deserialize(deserializer)?;
     Ok(opt.unwrap_or_default())
+}
+
+fn is_zero_i64(v: &i64) -> bool {
+    *v == 0
+}
+
+fn is_zero_u32(v: &u32) -> bool {
+    *v == 0
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
+}
+
+fn option_reply_control_is_empty(v: &Option<ReplyControl>) -> bool {
+    v.as_ref().is_none_or(ReplyControl::is_empty)
+}
+
+fn option_up_action_is_empty(v: &Option<ReplyUpAction>) -> bool {
+    v.as_ref().is_none_or(ReplyUpAction::is_empty)
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -23,36 +43,91 @@ pub struct CommentPageInfo {
     pub count: u64,
     #[serde(default)]
     pub acount: u64,
-    #[serde(flatten)]
-    pub extra: Map<String, Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ReplyLevelInfo {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub current_level: u32,
-    #[serde(flatten)]
-    pub extra: Map<String, Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ReplyMember {
     #[serde(default)]
-    pub mid: String,
-    #[serde(default)]
     pub uname: String,
     #[serde(default)]
+    pub mid: String,
+    #[serde(default)]
     pub level_info: ReplyLevelInfo,
-    #[serde(flatten)]
-    pub extra: Map<String, Value>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReplyPicture {
+    #[serde(default)]
+    pub img_src: String,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub img_width: u32,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub img_height: u32,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ReplyContent {
     #[serde(default)]
     pub message: String,
-    #[serde(flatten)]
-    pub extra: Map<String, Value>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_null_default",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub pictures: Vec<ReplyPicture>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReplyControl {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_desc: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_null_default",
+        skip_serializing_if = "is_false"
+    )]
+    pub up_reply: bool,
+}
+
+impl ReplyControl {
+    pub fn is_empty(&self) -> bool {
+        self.location.as_deref().is_none_or(|s| s.trim().is_empty())
+            && self
+                .time_desc
+                .as_deref()
+                .is_none_or(|s| s.trim().is_empty())
+            && !self.up_reply
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReplyUpAction {
+    #[serde(
+        default,
+        deserialize_with = "deserialize_null_default",
+        skip_serializing_if = "is_false"
+    )]
+    pub like: bool,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_null_default",
+        skip_serializing_if = "is_false"
+    )]
+    pub reply: bool,
+}
+
+impl ReplyUpAction {
+    pub fn is_empty(&self) -> bool {
+        !self.like && !self.reply
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -63,34 +138,144 @@ pub struct ReplyItem {
     pub oid: i64,
     #[serde(default)]
     pub mid: i64,
-    #[serde(default)]
-    pub rcount: u64,
-    #[serde(default)]
-    pub like: u64,
-    #[serde(default)]
-    pub action: u32,
-    #[serde(default)]
-    pub ctime: i64,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_null_default",
+        skip_serializing_if = "is_zero_i64"
+    )]
+    pub root: i64,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_null_default",
+        skip_serializing_if = "is_zero_i64"
+    )]
+    pub parent: i64,
     #[serde(default)]
     pub member: Option<ReplyMember>,
     #[serde(default)]
     pub content: ReplyContent,
-    #[serde(default, deserialize_with = "deserialize_null_default")]
+    #[serde(default)]
+    pub like: u64,
+    #[serde(default)]
+    pub rcount: u64,
+    #[serde(default)]
+    pub action: u32,
+    #[serde(default)]
+    pub ctime: i64,
+    #[serde(default, skip_serializing_if = "option_reply_control_is_empty")]
+    pub reply_control: Option<ReplyControl>,
+    #[serde(default, skip_serializing_if = "option_up_action_is_empty")]
+    pub up_action: Option<ReplyUpAction>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_null_default",
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub replies: Vec<ReplyItem>,
-    #[serde(flatten)]
-    pub extra: Map<String, Value>,
+}
+
+impl ReplyItem {
+    pub fn author_name(&self) -> &str {
+        self.member
+            .as_ref()
+            .map(|m| m.uname.as_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("匿名用户")
+    }
+
+    pub fn author_level(&self) -> Option<u32> {
+        self.member
+            .as_ref()
+            .map(|m| m.level_info.current_level)
+            .filter(|&lv| lv > 0)
+    }
+
+    pub fn location_short(&self) -> Option<&str> {
+        let loc = self.reply_control.as_ref()?.location.as_deref()?;
+        let trimmed = loc
+            .trim()
+            .strip_prefix("IP属地：")
+            .or_else(|| loc.trim().strip_prefix("IP属地:"))
+            .unwrap_or(loc.trim())
+            .trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    }
+
+    pub fn is_up(&self, upper_mid: Option<i64>) -> bool {
+        upper_mid.is_some_and(|u| u > 0 && self.mid == u)
+    }
+
+    pub fn is_up_liked(&self) -> bool {
+        self.up_action.as_ref().is_some_and(|ua| ua.like)
+    }
+
+    pub fn is_up_replied(&self) -> bool {
+        self.up_action.as_ref().is_some_and(|ua| ua.reply)
+            || self.reply_control.as_ref().is_some_and(|rc| rc.up_reply)
+    }
+
+    pub fn is_liked(&self) -> bool {
+        self.action == 1
+    }
+
+    pub fn clean_message(&self) -> String {
+        crate::utils::string::unescape_html_entities(self.content.message.trim())
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CommentUpper {
+    #[serde(default)]
+    pub mid: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top: Option<Box<ReplyItem>>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CommentTop {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upper: Option<Box<ReplyItem>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admin: Option<Box<ReplyItem>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CommentPageData {
     #[serde(default)]
     pub page: CommentPageInfo,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upper: Option<CommentUpper>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top: Option<CommentTop>,
     #[serde(default, deserialize_with = "deserialize_null_default")]
     pub replies: Vec<ReplyItem>,
-    #[serde(default, deserialize_with = "deserialize_null_default")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_null_default",
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub hots: Vec<ReplyItem>,
-    #[serde(flatten)]
-    pub extra: Map<String, Value>,
+    #[serde(skip)]
+    pub raw: Value,
+}
+
+impl CommentPageData {
+    pub fn upper_mid(&self) -> Option<i64> {
+        self.upper.as_ref().map(|u| u.mid).filter(|&m| m > 0)
+    }
+
+    pub fn pinned_reply(&self) -> Option<&ReplyItem> {
+        self.upper
+            .as_ref()
+            .and_then(|u| u.top.as_deref())
+            .or_else(|| self.top.as_ref().and_then(|t| t.upper.as_deref()))
+            .or_else(|| self.top.as_ref().and_then(|t| t.admin.as_deref()))
+            .filter(|r| r.rpid > 0)
+    }
 }
 
 fn map_comment_api_error(code: i64, msg: &str, action: &str) -> BiliLiveError {
@@ -149,7 +334,9 @@ pub fn get_comments(
     if json["data"].is_null() {
         return Ok(CommentPageData::default());
     }
-    let data: CommentPageData = serde_json::from_value(json["data"].clone())?;
+    let raw_data = json["data"].clone();
+    let mut data: CommentPageData = serde_json::from_value(raw_data.clone())?;
+    data.raw = raw_data;
     Ok(data)
 }
 
@@ -157,12 +344,20 @@ pub fn get_comments(
 pub struct SubReplyPageData {
     #[serde(default)]
     pub page: CommentPageInfo,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upper: Option<CommentUpper>,
     #[serde(default)]
     pub root: Option<ReplyItem>,
     #[serde(default, deserialize_with = "deserialize_null_default")]
     pub replies: Vec<ReplyItem>,
-    #[serde(flatten)]
-    pub extra: Map<String, Value>,
+    #[serde(skip)]
+    pub raw: Value,
+}
+
+impl SubReplyPageData {
+    pub fn upper_mid(&self) -> Option<i64> {
+        self.upper.as_ref().map(|u| u.mid).filter(|&m| m > 0)
+    }
 }
 
 /// 获取指定根评论下的楼中楼二级回复列表 (`GET /x/v2/reply/reply`)
@@ -208,7 +403,9 @@ pub fn get_sub_replies(
     if json["data"].is_null() {
         return Ok(SubReplyPageData::default());
     }
-    let data: SubReplyPageData = serde_json::from_value(json["data"].clone())?;
+    let raw_data = json["data"].clone();
+    let mut data: SubReplyPageData = serde_json::from_value(raw_data.clone())?;
+    data.raw = raw_data;
     Ok(data)
 }
 
@@ -543,5 +740,126 @@ mod tests {
         ));
 
         handle.join().unwrap();
+    }
+
+    #[test]
+    fn test_clean_json_strips_widget_bloat_and_preserves_raw() {
+        let raw_payload = serde_json::json!({
+            "page": { "num": 1, "size": 20, "count": 1, "acount": 2 },
+            "upper": {
+                "mid": 400880294,
+                "top": {
+                    "rpid": 9001,
+                    "oid": 79677524,
+                    "mid": 400880294,
+                    "rcount": 0,
+                    "like": 10,
+                    "action": 0,
+                    "ctime": 1700000000,
+                    "member": {
+                        "mid": "400880294",
+                        "uname": "QwerProg",
+                        "level_info": { "current_level": 6 },
+                        "avatar_item": { "fallback_layers": { "layers": [] } },
+                        "user_sailing": { "cardbg": {} },
+                        "vip": { "label": {} }
+                    },
+                    "content": {
+                        "message": "置顶公告 &amp; 说明",
+                        "emote": { "[doge]": {} },
+                        "pictures": [{ "img_src": "https://example.com/a.jpg", "img_width": 800, "img_height": 600 }]
+                    },
+                    "reply_control": { "location": "IP属地：江苏", "time_desc": "1小时前发布", "up_reply": false },
+                    "up_action": { "like": false, "reply": false },
+                    "track_info": "raw_track"
+                }
+            },
+            "replies": [
+                {
+                    "rpid": 9002,
+                    "oid": 79677524,
+                    "mid": 123,
+                    "rcount": 1,
+                    "like": 3,
+                    "action": 1,
+                    "ctime": 1700000100,
+                    "member": {
+                        "mid": "123",
+                        "uname": "路人甲",
+                        "level_info": { "current_level": 5 },
+                        "avatar_item": { "layers": [1, 2, 3] },
+                        "user_sailing": { "pendant": {} },
+                        "vip": { "type": 2 }
+                    },
+                    "content": {
+                        "message": "支持",
+                        "emote": { "[笑哭]": {} }
+                    },
+                    "reply_control": {},
+                    "up_action": { "like": true, "reply": true }
+                }
+            ],
+            "hots": null,
+            "control": { "answer_guide_text": "noise" },
+            "config": { "showadmin": 1 }
+        });
+
+        let mut page: CommentPageData = serde_json::from_value(raw_payload.clone()).unwrap();
+        page.raw = raw_payload;
+
+        let serialized = serde_json::to_value(&page).unwrap();
+        let s_str = serde_json::to_string(&serialized).unwrap();
+        for bloat in [
+            "avatar_item",
+            "fallback_layers",
+            "user_sailing",
+            "vip",
+            "emote",
+            "track_info",
+            "answer_guide_text",
+            "showadmin",
+        ] {
+            assert!(
+                !s_str.contains(bloat),
+                "unexpected bloat key {bloat}: {s_str}"
+            );
+        }
+        assert!(serialized.get("control").is_none());
+        assert!(serialized.get("config").is_none());
+
+        // Empty up_action & empty reply_control omitted cleanly
+        let top_obj = &serialized["upper"]["top"];
+        assert!(top_obj.get("up_action").is_none());
+        assert_eq!(
+            top_obj["content"]["pictures"][0]["img_src"],
+            "https://example.com/a.jpg"
+        );
+
+        let reply_obj = &serialized["replies"][0];
+        assert!(reply_obj.get("reply_control").is_none());
+        assert_eq!(reply_obj["up_action"]["like"], true);
+        assert_eq!(reply_obj["up_action"]["reply"], true);
+
+        // Raw preserves untouched payload
+        assert!(page.raw["upper"]["top"]["member"]["avatar_item"].is_object());
+        assert!(page.raw["replies"][0]["content"]["emote"].is_object());
+
+        // Helper methods
+        assert_eq!(page.upper_mid(), Some(400880294));
+        let pinned = page.pinned_reply().unwrap();
+        assert_eq!(pinned.rpid, 9001);
+        assert_eq!(pinned.author_name(), "QwerProg");
+        assert_eq!(pinned.author_level(), Some(6));
+        assert_eq!(pinned.location_short(), Some("江苏"));
+        assert!(pinned.is_up(page.upper_mid()));
+        assert!(!pinned.is_up_liked());
+        assert_eq!(pinned.clean_message(), "置顶公告 & 说明");
+
+        let r2 = &page.replies[0];
+        assert!(!r2.is_up(page.upper_mid()));
+        assert!(r2.is_liked());
+        assert!(r2.is_up_liked());
+        assert!(r2.is_up_replied());
+        assert_eq!(r2.location_short(), None);
     }
 }

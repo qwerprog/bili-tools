@@ -754,7 +754,7 @@ pub enum VideoCommands {
         output: Option<PathBuf>,
     },
 
-    /// 查看视频评论列表（支持 --root 展开楼中楼二级回复）
+    /// 查看视频评论列表（默认多行树状排版，支持 --compact / --root 楼中楼）
     #[command(visible_alias = "replies")]
     Comments {
         /// 视频 BV号、AV号、番剧 ep/ss、URL 或 b23.tv 短链接
@@ -772,9 +772,17 @@ pub enum VideoCommands {
         #[arg(long, value_name = "RPID", value_parser = clap::value_parser!(i64).range(1..))]
         root: Option<i64>,
 
-        /// 完整多行展示长评论全文及内嵌热评子回复预览（不截断）
-        #[arg(long)]
+        /// 兼容参数：完整多行展示评论与内嵌楼中楼（现已成为默认行为）
+        #[arg(long, conflicts_with = "compact")]
         full: bool,
+
+        /// 使用紧凑单行表格模式显示评论列表（截断长内容）
+        #[arg(long, conflicts_with = "full")]
+        compact: bool,
+
+        /// 配合 --json 返回 B 站原始未精简接口数据（含头像图层、装扮等冗余字段）
+        #[arg(long)]
+        raw: bool,
     },
 
     /// 发表、点赞或删除视频评论
@@ -2152,6 +2160,26 @@ mod tests {
                 "bit", "video", "comments", "BV1xx", "--root", "12345", "--full"
             ])
             .is_ok()
+        );
+        let c_cmp =
+            Cli::try_parse_from(["bit", "video", "comments", "BV1xx", "--compact"]).unwrap();
+        assert!(matches!(
+            c_cmp.command,
+            Some(Commands::Video(VideoCommands::Comments {
+                compact: true,
+                raw: false,
+                ..
+            }))
+        ));
+        let c_raw =
+            Cli::try_parse_from(["bit", "--json", "video", "comments", "BV1xx", "--raw"]).unwrap();
+        assert!(matches!(
+            c_raw.command,
+            Some(Commands::Video(VideoCommands::Comments { raw: true, .. }))
+        ));
+        assert!(
+            Cli::try_parse_from(["bit", "video", "comments", "BV1xx", "--compact", "--full"])
+                .is_err()
         );
     }
 }

@@ -4,13 +4,10 @@ use crate::cli::args::{
 };
 use crate::cli::output::{is_json, is_quiet, print_json, print_spacer};
 use crate::error::{BiliLiveError, Result};
-use crate::ui::components::{
-    Cell, Column, InfoCard, print_section_header, print_table, wrap_to_width,
-};
-use crate::ui::theme::{BILI_CYAN, BILI_PINK, color_enabled, paint_stderr, terminal_width};
+use crate::ui::components::{Cell, Column, InfoCard, print_section_header, print_table};
+use crate::ui::theme::{BILI_CYAN, color_enabled, paint_stderr, terminal_width};
 use crate::utils::string::{
     format_duration, format_num, format_timestamp, sanitize_filename, truncate_to_width,
-    unescape_html_entities,
 };
 use crate::{user_info, user_success, user_warning};
 use crossterm::style::Color;
@@ -1021,7 +1018,16 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             sort,
             root,
             full,
+            compact,
+            raw,
         } => {
+            let _ = full;
+            if raw && !is_json() {
+                return Err(BiliLiveError::Input(
+                    "--raw 仅支持配合 --json 使用".to_string(),
+                ));
+            }
+
             let cookies = crate::auth::cookies::read_cookies().ok();
             let aid = crate::api::video::resolve_video_aid(&video, cookies.as_ref())?;
 
@@ -1029,7 +1035,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 let sub =
                     crate::api::comment::get_sub_replies(aid, root_rpid, page, cookies.as_ref())?;
                 if is_json() {
-                    print_json(&sub)?;
+                    if raw {
+                        print_json(&sub.raw)?;
+                    } else {
+                        print_json(&sub)?;
+                    }
                     return Ok(());
                 }
 
@@ -1037,27 +1047,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 if let Some(ref root_item) = sub.root
                     && root_item.rpid > 0
                 {
-                    let root_uname = root_item
-                        .member
-                        .as_ref()
-                        .map(|m| m.uname.as_str())
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or("匿名用户");
-                    let card = InfoCard::new("💬 根评论详情")
-                        .with_badge(format!("RPID {}", root_item.rpid), BILI_CYAN)
-                        .add_row("作者", Cell::bold_colored(root_uname, Color::White))
-                        .add_row(
-                            "互动",
-                            Cell::pink(format!(
-                                "{} 赞  ·  {} 条回复",
-                                root_item.like, sub.page.count
-                            )),
-                        )
-                        .add_plain_row("时间", format_timestamp(root_item.ctime))
-                        .add_plain_row(
-                            "内容",
-                            unescape_html_entities(root_item.content.message.trim()),
-                        );
+                    let card = crate::ui::comment_fmt::build_root_info_card(
+                        root_item,
+                        sub.upper_mid(),
+                        sub.page.count,
+                    );
                     card.print();
                     print_spacer();
                 }
@@ -1067,46 +1061,24 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     return Ok(());
                 }
 
+                let total_pages = sub.page.count.div_ceil(sub.page.size.max(20)).max(1);
                 print_section_header(
                     &format!("楼中楼回复 (root={root_rpid})"),
-                    Some(&format!("第 {} 页 · 共 {} 条", page, sub.page.count)),
+                    Some(&format!(
+                        "第 {page}/{total_pages} 页 · 共 {} 条",
+                        sub.page.count
+                    )),
                 );
                 if !is_quiet() {
-                    print_spacer();
-                    let use_color = color_enabled();
-                    let wrap_w = terminal_width().saturating_sub(6).max(32);
-                    let mut stdout = std::io::stdout().lock();
-                    for r in &sub.replies {
-                        let uname = r
-                            .member
-                            .as_ref()
-                            .map(|m| m.uname.as_str())
-                            .filter(|s| !s.is_empty())
-                            .unwrap_or("匿名用户");
-                        let ts = format_timestamp(r.ctime);
-                        let meta_line = if use_color {
-                            use crossterm::style::Stylize;
-                            format!(
-                                "  {} {}  {}  {}",
-                                format!("[{}]", r.rpid).with(BILI_CYAN).bold(),
-                                uname.bold(),
-                                format!("♥ {}", r.like).with(BILI_PINK),
-                                ts.as_str().dark_grey()
-                            )
-                        } else {
-                            format!("  [{}] {}  ♥ {}  {}", r.rpid, uname, r.like, ts)
-                        };
-                        if writeln!(stdout, "{meta_line}").is_err() {
-                            break;
-                        }
-                        let clean_msg = unescape_html_entities(r.content.message.trim());
-                        for seg in wrap_to_width(&clean_msg, wrap_w) {
-                            if writeln!(stdout, "    {seg}").is_err() {
-                                break;
-                            }
-                        }
-                        let _ = writeln!(stdout);
-                    }
+                    let rendered = crate::ui::comment_fmt::render_sub_reply_list(
+                        &sub,
+                        root_rpid,
+                        &video,
+                        page,
+                        terminal_width(),
+                        color_enabled(),
+                    );
+                    write_stdout_broken_pipe_safe(&rendered)?;
                 }
                 return Ok(());
             }
@@ -1115,119 +1087,51 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 crate::api::comment::get_comments(aid, page, sort.as_api_str(), cookies.as_ref())?;
 
             if is_json() {
-                print_json(&data)?;
-                return Ok(());
-            }
-
-            if data.replies.is_empty() {
-                user_info!("暂无评论");
-                return Ok(());
-            }
-
-            print_spacer();
-            print_section_header(
-                "视频评论",
-                Some(&format!("第 {} 页 · 共 {} 条", page, data.page.acount)),
-            );
-
-            if full {
-                if !is_quiet() {
-                    print_spacer();
-                    let use_color = color_enabled();
-                    let wrap_w = terminal_width().saturating_sub(6).max(32);
-                    let mut stdout = std::io::stdout().lock();
-                    for r in &data.replies {
-                        let uname = r
-                            .member
-                            .as_ref()
-                            .map(|m| m.uname.as_str())
-                            .filter(|s| !s.is_empty())
-                            .unwrap_or("匿名用户");
-                        let ts = format_timestamp(r.ctime);
-                        let header = if use_color {
-                            use crossterm::style::Stylize;
-                            format!(
-                                "  {} {}  {}  {}  {}",
-                                format!("[{}]", r.rpid).with(BILI_CYAN).bold(),
-                                uname.bold(),
-                                format!("♥ {}", r.like).with(BILI_PINK),
-                                format!("💬 {}", r.rcount).dark_grey(),
-                                ts.as_str().dark_grey()
-                            )
-                        } else {
-                            format!(
-                                "  [{}] {}  ♥ {}  💬 {}  {}",
-                                r.rpid, uname, r.like, r.rcount, ts
-                            )
-                        };
-                        if writeln!(stdout, "{header}").is_err() {
-                            break;
-                        }
-                        let clean_msg = unescape_html_entities(r.content.message.trim());
-                        for seg in wrap_to_width(&clean_msg, wrap_w) {
-                            if writeln!(stdout, "    {seg}").is_err() {
-                                break;
-                            }
-                        }
-                        for child in &r.replies {
-                            let c_name = child
-                                .member
-                                .as_ref()
-                                .map(|m| m.uname.as_str())
-                                .filter(|s| !s.is_empty())
-                                .unwrap_or("匿名用户");
-                            let c_msg =
-                                unescape_html_entities(&child.content.message).replace('\n', " ");
-                            let sub_line = format!(
-                                "↳ [{}] {}: {}",
-                                child.rpid,
-                                c_name,
-                                truncate_to_width(c_msg.trim(), wrap_w.saturating_sub(6))
-                            );
-                            if use_color {
-                                use crossterm::style::Stylize;
-                                let _ = writeln!(stdout, "      {}", sub_line.dark_grey());
-                            } else {
-                                let _ = writeln!(stdout, "      {sub_line}");
-                            }
-                        }
-                        let _ = writeln!(stdout);
-                    }
+                if raw {
+                    print_json(&data.raw)?;
+                } else {
+                    print_json(&data)?;
                 }
                 return Ok(());
             }
 
-            let cols = [
-                Column::right("RPID", 14),
-                Column::left("用户", 16),
-                Column::right("赞", 6),
-                Column::right("回复", 6),
-                Column::left("时间", 16),
-                Column::left("评论内容", 36),
-            ];
-            let rows: Vec<Vec<Cell>> = data
-                .replies
-                .iter()
-                .map(|r| {
-                    let uname = r
-                        .member
-                        .as_ref()
-                        .map(|m| m.uname.as_str())
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or("匿名用户");
-                    let msg = unescape_html_entities(&r.content.message).replace('\n', " ");
-                    vec![
-                        Cell::cyan(r.rpid.to_string()),
-                        Cell::plain(truncate_to_width(uname, 16)),
-                        Cell::pink(r.like.to_string()),
-                        Cell::plain(r.rcount.to_string()),
-                        Cell::muted(format_timestamp(r.ctime)),
-                        Cell::plain(truncate_to_width(msg.trim(), 36)),
-                    ]
-                })
-                .collect();
-            print_table(&cols, &rows);
+            if data.replies.is_empty() && !(page == 1 && data.pinned_reply().is_some()) {
+                user_info!("暂无评论");
+                return Ok(());
+            }
+
+            let sort_label = match sort {
+                crate::cli::args::CommentSort::Hot => "按热度",
+                crate::cli::args::CommentSort::Time => "按时间",
+            };
+            let total_display = data.page.acount.max(data.page.count);
+            let total_pages = data.page.count.div_ceil(data.page.size.max(1)).max(1);
+
             print_spacer();
+            print_section_header(
+                "视频评论",
+                Some(&format!(
+                    "{sort_label} · 第 {page}/{total_pages} 页 · 共 {total_display} 条"
+                )),
+            );
+
+            if compact {
+                crate::ui::comment_fmt::print_comments_compact_table(&data);
+                print_spacer();
+                return Ok(());
+            }
+
+            if !is_quiet() {
+                let rendered = crate::ui::comment_fmt::render_comment_list(
+                    &data,
+                    &video,
+                    page,
+                    sort_label,
+                    terminal_width(),
+                    color_enabled(),
+                );
+                write_stdout_broken_pipe_safe(&rendered)?;
+            }
         }
 
         VideoCommands::Comment(sub) => match sub {
