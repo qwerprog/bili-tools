@@ -20,7 +20,7 @@
 | `auth` | `login`, `status`, `logout`, `refresh`, `daily` |
 | `live` | `start`, `stop`, `status`, `info`, `title`, `area`, `following`, `stream`, `danmaku`, `chat`, `send`, `record` |
 | `search` | `video`, `user`, `live`, `hot` |
-| `video` | `info`, `streams`, `subtitle`, `summary`, `tags`, `related`, `danmaku`, `comments`, `comment (post\|like\|delete)`, `like`, `coin`, `triple`, `download`, `upload`, `append`, `replace`, `studio (ls\|show)` |
+| `video` | `info`, `streams`, `subtitle`, `summary`, `tags`, `related`, `danmaku`, `comments [--compact\|-i\|--root\|--raw]`, `comment (post\|like\|delete)`, `like`, `coin`, `triple`, `download`, `upload`, `append`, `replace`, `studio (ls\|show)` |
 | `user` | `info`, `videos`, `dynamics`, `follow`, `unfollow` |
 | `feed` | `bit feed [--type all\|video\|article] [--offset <CURSOR>]` |
 | `rank` | `video`, `popular` |

@@ -45,9 +45,12 @@ bit --json video tags BV1hp4y1k7SV
 
 ### 3. Read Comments & Sub-Replies ("楼中楼")
 ```bash
+# Clean structured JSON (strips avatar/sailing/vip widget bloat; pass --raw for untouched upstream JSON):
 bit --json video comments BV1hp4y1k7SV --sort hot --page 1
 # Expand sub-replies under a root comment RPID:
 bit --json video comments BV1hp4y1k7SV --root <RPID> --page 1
+# Interactive TUI comment browser (TTY only, no --json):
+bit video comments BV1hp4y1k7SV -i
 ```
 
 ### 4. Download Video, Audio, Danmaku, or Sidecars

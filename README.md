@@ -119,7 +119,7 @@ bit video summary BV1hp4y1k7SV              # 查看视频 AI 总结与大纲
 bit video tags BV1hp4y1k7SV                 # 查看视频标签
 bit video related BV1hp4y1k7SV              # 查看相关推荐视频
 bit video danmaku BV1hp4y1k7SV --format ass -o dm.ass
-bit video comments BV1hp4y1k7SV --sort hot  # 查看评论列表（加 --root <RPID> 看楼中楼，--full 看完整多行）
+bit video comments BV1hp4y1k7SV --sort hot  # 查看评论列表（默认多行树状完整展示；支持 -i 交互浏览 / --root <RPID> 楼中楼 / --compact 紧凑表 / --json --raw 原始数据）
 bit video comment post BV1hp4y1k7SV "好评"   # 发表/点赞/删除评论 (post/like/delete)
 bit video like BV1hp4y1k7SV                 # 点赞
 bit video coin BV1hp4y1k7SV -n 2            # 投币 (1-2)
@@ -200,7 +200,7 @@ Options:
 
 > 补充说明：`bit video comment` 包含三级子命令 `post` / `like` / `delete`；画质参数统一使用 `-Q, --quality`（避免与全局 `-q, --quiet` 冲突）；`history list` 分类过滤使用 `-c, --category`（`all` / `archive` / `live` / `article`）。
 >
-> 常用默认参数与扩展选项：`video download` 默认 `-Q 120`、`-e avc`，`-o` 支持 `{title}`、`{bvid}`、`{aid}`、`{p}`、`{page}`、`{p_title}`、`{part}`、`{quality}`、`{codec}` 模板变量；`video danmaku` 默认 `--format xml`；`video subtitle` 默认 `--format srt` 并支持 `--lang <CODE>`；`video comments` 默认 `--sort hot`；`video comment post` 支持 `--root` / `--parent` 回复指定评论，`video comment like` 支持 `--cancel`；`user videos` 支持 `--keyword` 筛选，`user dynamics` 与 `feed` 均支持 `--offset <CURSOR>` 游标翻页。
+> 常用默认参数与扩展选项：`video download` 默认 `-Q 120`、`-e avc`，`-o` 支持 `{title}`、`{bvid}`、`{aid}`、`{p}`、`{page}`、`{p_title}`、`{part}`、`{quality}`、`{codec}` 模板变量；`video danmaku` 默认 `--format xml`；`video subtitle` 默认 `--format srt` 并支持 `--lang <CODE>`；`video comments` 默认 `--sort hot` 且精简 `--json` 冗余装扮字段（可加 `--raw` 获取完整原始返回，`-i` 进入交互式评论 TUI，`--compact` 切换单行表）；`video comment post` 支持 `--root` / `--parent` 回复指定评论，`video comment like` 支持 `--cancel`；`user videos` 支持 `--keyword` 筛选，`user dynamics` 与 `feed` 均支持 `--offset <CURSOR>` 游标翻页。
 
 ### 外部依赖边界 (`ffmpeg`)
 
