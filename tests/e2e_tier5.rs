@@ -1511,6 +1511,12 @@ fn t5_c2_11_comments_human_sort_time_reply_root_parent_cancel_and_error_mapping(
     env.run_bt(&["video", "comments", "BV1uJ411r7hL"])
         .assert_exit(0)
         .assert_stdout_contains("匿名用户")
+        .assert_stdout_contains("第一行")
+        .assert_stdout_contains("第二行");
+
+    env.run_bt(&["video", "comments", "BV1uJ411r7hL", "--compact"])
+        .assert_exit(0)
+        .assert_stdout_contains("匿名用户")
         .assert_stdout_contains("第一行 第二行");
 
     server.set_fault("/x/v2/reply", FaultConfig::data_null());
@@ -2082,4 +2088,157 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
             .unwrap()
             .contains("<chatserver>chat.bilibili.com</chatserver>")
     );
+}
+
+#[test]
+fn t5_c2_12_comments_clean_json_raw_readable_default_and_tui_guards() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+
+    let bloated_payload = json!({
+        "code": 0,
+        "message": "0",
+        "data": {
+            "page": { "num": 1, "size": 20, "count": 2, "acount": 7 },
+            "upper": {
+                "mid": 400880294,
+                "top": {
+                    "rpid": 9001,
+                    "oid": 79677524,
+                    "mid": 400880294,
+                    "rcount": 0,
+                    "like": 42,
+                    "action": 0,
+                    "ctime": 1700000000,
+                    "member": {
+                        "mid": "400880294",
+                        "uname": "QwerProg",
+                        "level_info": { "current_level": 6 },
+                        "avatar_item": { "fallback_layers": { "layers": [{"id": 1}] } },
+                        "user_sailing": { "cardbg": { "name": "sailing" } },
+                        "vip": { "label": { "text": "大会员" } }
+                    },
+                    "content": {
+                        "message": "置顶第一行\n置顶第二行",
+                        "emote": { "[doge]": {} },
+                        "pictures": [{ "img_src": "https://example.com/pic.jpg", "img_width": 800, "img_height": 600 }]
+                    },
+                    "reply_control": { "location": "IP属地：江苏", "time_desc": "1小时前发布" },
+                    "up_action": { "like": false, "reply": false }
+                }
+            },
+            "replies": [
+                {
+                    "rpid": 9002,
+                    "oid": 79677524,
+                    "mid": 12345,
+                    "rcount": 5,
+                    "like": 18,
+                    "action": 1,
+                    "ctime": 1700000100,
+                    "member": {
+                        "mid": "12345",
+                        "uname": "热心观众",
+                        "level_info": { "current_level": 5 },
+                        "avatar_item": { "fallback_layers": { "layers": [] } },
+                        "user_sailing": { "cardbg": {} },
+                        "vip": { "vipType": 2 }
+                    },
+                    "content": {
+                        "message": "这是一条超长评论正文，默认模式需要完整换行显示而不应该在三十六列处截断",
+                        "emote": { "[笑哭]": {} }
+                    },
+                    "reply_control": { "location": "IP属地：江苏", "time_desc": "2小时前发布", "up_reply": true },
+                    "up_action": { "like": true, "reply": true },
+                    "replies": [
+                        {
+                            "rpid": 9003,
+                            "oid": 79677524,
+                            "mid": 400880294,
+                            "root": 9002,
+                            "parent": 9002,
+                            "like": 3,
+                            "ctime": 1700000200,
+                            "member": {
+                                "mid": "400880294",
+                                "uname": "QwerProg",
+                                "level_info": { "current_level": 6 },
+                                "avatar_item": {},
+                                "user_sailing": {},
+                                "vip": {}
+                            },
+                            "content": {
+                                "message": "这是一条同样完整展开不会截断的楼中楼热评回复，确保阅读体验清晰",
+                                "emote": {}
+                            },
+                            "reply_control": { "location": "IP属地：新加坡" }
+                        }
+                    ]
+                }
+            ],
+            "hots": null,
+            "control": { "answer_guide_text": "noise" }
+        }
+    });
+    server.set_fault("/x/v2/reply", FaultConfig::json(bloated_payload));
+
+    // 1. Clean --json strips avatar/sailing/vip/emote bloat
+    let clean_out = env.run_bt(&["--json", "video", "comments", "BV1uJ411r7hL"]);
+    let clean_json = clean_out.assert_json_ok();
+    let clean_text = serde_json::to_string(&clean_json).unwrap();
+    assert!(clean_text.contains("9002"));
+    assert!(clean_text.contains("热心观众"));
+    assert!(clean_text.contains("IP属地：江苏"));
+    assert!(clean_text.contains("up_action"));
+    assert!(clean_text.contains("pictures"));
+    for bloat in [
+        "avatar_item",
+        "fallback_layers",
+        "user_sailing",
+        "vip",
+        "emote",
+    ] {
+        assert!(!clean_text.contains(bloat), "clean JSON leaked {bloat}");
+    }
+
+    // 2. --json --raw retains full upstream payload
+    let raw_out = env.run_bt(&["--json", "video", "comments", "BV1uJ411r7hL", "--raw"]);
+    let raw_json = raw_out.assert_json_ok();
+    let raw_text = serde_json::to_string(&raw_json).unwrap();
+    assert!(raw_text.contains("avatar_item"));
+    assert!(raw_text.contains("fallback_layers"));
+
+    // 3. --raw without --json fails with exit 1 (Input error)
+    env.run_bt(&["video", "comments", "BV1uJ411r7hL", "--raw"])
+        .assert_exit(1)
+        .assert_stderr_contains("--raw 仅支持配合 --json 使用");
+
+    // 4. -i guards fail BEFORE hitting /x/v2/reply when --json or non-TTY
+    server.reset_requests();
+    env.run_bt(&["--json", "video", "comments", "BV1uJ411r7hL", "-i"])
+        .assert_json_err(Some("Input"));
+    env.run_bt(&["video", "comments", "BV1uJ411r7hL", "-i"])
+        .assert_exit(1)
+        .assert_stderr_contains("交互式评论浏览器需要交互式终端 (TTY)");
+    assert!(
+        server
+            .requests()
+            .iter()
+            .all(|r| !r.path.starts_with("/x/v2/reply")),
+        "-i guards must reject before fetching comments"
+    );
+
+    // 5. Default human readable output displays badges, multiline body, full sub-replies, and --root hint
+    let human_out = env.run_bt(&["video", "comments", "BV1uJ411r7hL"]);
+    human_out.assert_exit(0);
+    let compact_ws = human_out.stdout.replace(['\n', ' '], "");
+    assert!(human_out.stdout.contains("[置顶]"));
+    assert!(human_out.stdout.contains("[UP]"));
+    assert!(human_out.stdout.contains("Lv.5"));
+    assert!(human_out.stdout.contains("江苏"));
+    assert!(human_out.stdout.contains("[UP主觉得很赞]"));
+    assert!(human_out.stdout.contains("[🖼 图片 ×1]"));
+    assert!(compact_ws.contains("默认模式需要完整换行显示而不应该在三十六列处截断"));
+    assert!(compact_ws.contains("同样完整展开不会截断的楼中楼热评回复"));
+    assert!(human_out.stdout.contains("--root 9002"));
 }
