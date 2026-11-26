@@ -20,7 +20,7 @@
 | `auth` | `login`, `status`, `logout`, `refresh`, `daily` |
 | `live` | `start`, `stop`, `status`, `info`, `title`, `area`, `following`, `stream`, `danmaku`, `chat`, `send`, `record` |
 | `search` | `video`, `user`, `live`, `hot` |
-| `video` | `info`, `streams`, `subtitle`, `summary`, `tags`, `related`, `danmaku`, `comments`, `comment (post\|like\|delete)`, `like`, `coin`, `triple`, `download`, `upload`, `append`, `replace`, `studio (ls\|show)` |
+| `video` | `info`, `streams`, `subtitle`, `subtitle-upload`, `subtitle-list`, `subtitle-delete`, `summary`, `tags`, `related`, `danmaku`, `comments`, `comment (post\|like\|delete)`, `like`, `coin`, `triple`, `download`, `upload`, `append`, `replace`, `studio (ls\|show)` |
 | `user` | `info`, `videos`, `dynamics`, `follow`, `unfollow` |
 | `feed` | `bit feed [--type all\|video\|article] [--offset <CURSOR>]` |
 | `rank` | `video`, `popular` |
@@ -41,6 +41,24 @@
 - `--line`: `bda2`, `qn`, `ws`, `tx`, `bldsa` (UPOS CDN line).
 - `--tid <TID>`: Bilibili partition ID (e.g., `171` 电子竞技, `17` 单机游戏, `122` 野生技术协会).
 - `--copyright <1|2>`: `1` original (default), `2` repost (requires `--source`).
+
+## Subtitle Track Options (`video subtitle-upload` / `subtitle-list` / `subtitle-delete`)
+
+```bash
+bit video subtitle-upload <VIDEO> <FILE> --lang <CODE> [-p N] [--draft] [--sign] [--dry-run]
+bit video subtitle-list [VIDEO] [-p N] [--status all|draft|published|deleted] [--page N] [--page-size N]
+bit video subtitle-delete <VIDEO> --id <SUBTITLE_ID> [--id ...] [-p N] [-y]
+```
+
+- **Input**: `subtitle-upload` only accepts `.srt`; it is converted to BCC client-side (raw SRT is rejected by Bilibili).
+- **Language (`--lang`)**: base ISO codes `en`, `zh`, `zh-Hant`, `ja`, `ko`. `zh-Hans` / `zh-CN` / `en-US` are normalized (`zh`, `zh`, `en`); anything else fails with an `Input` error before any request.
+- **Versioning**: subtitle tracks are bound to `cid` (part), and each upload adds a new version for the same `(cid, lang)`; old versions stay in the list.
+- **Draft (`--draft`)**: sends `submit=0` (not submitted for review). Without it, `submit=1`.
+- **Dry run (`--dry-run`)**: parses and converts only, zero network requests, no login required; JSON contains the full `bcc` object and entry/timeline stats.
+- **Listing**: always uses `author/list`. With `VIDEO` it resolves the cid and filters by `oid`; `-p/--part` selects the part while `--page` paginates the account list.
+- **Review delay**: after submit, anonymous playback waits for approval (a few minutes). Not visible anonymously ≠ failure.
+- **Verification**: after `draft/save`, the command polls `author/list` for a new `(cid, lang)` entry (server index lag measured ~40 s; default budget 90 s). If no new version appears, it fails instead of reporting a false success.
+- **Deletion**: soft delete; `status` first becomes `4` (visible in the list for a short window) and the server later drops the entry. Non-interactive or `--json` invocations require `-y`.
 
 ## JSON Error Envelope Kinds
 

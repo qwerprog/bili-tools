@@ -3,9 +3,10 @@ name: bili-tools
 description: >-
   Operate Bilibili via the `bit` CLI (bili-tools). Use when the user asks to
   inspect, search, summarize, download, or upload Bilibili videos or bangumi/PGC,
-  read or post comments and sub-replies, manage favorites, watch-later, or
-  watch history, check user profiles/dynamics/rankings, or manage Bilibili live
-  streams, danmaku, and 24/7 recording.
+  upload/list/delete subtitle tracks, read or post comments and sub-replies,
+  manage favorites, watch-later, or watch history, check user
+  profiles/dynamics/rankings, or manage Bilibili live streams, danmaku, and
+  24/7 recording.
 ---
 
 # Bilibili CLI (`bit`) Skill
@@ -86,6 +87,24 @@ bit --json video append <BVID> part2.mp4
 # Replace part 1's video file in place (keeps BV & stats; optional new title; re-review required):
 bit --json video replace <BVID> new.mp4 -p 1 -t "新标题"
 ```
+
+### 8. Subtitle Track Management (Confirm Writes First)
+```bash
+# Convert a local SRT to BCC and submit it to one part (adds a new version):
+bit --json video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh -p 1
+# Save as draft, or verify the conversion offline (zero network requests):
+bit --json video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh --draft
+bit --json video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh --dry-run
+# List subtitle tracks for a part, or for the whole account:
+bit --json video subtitle-list BV1hp4y1k7SV -p 1 --status all
+bit --json video subtitle-list --status deleted
+# Delete tracks (soft delete; non-interactive/--json requires -y):
+bit --json -y video subtitle-delete BV1hp4y1k7SV --id <SUBTITLE_ID> -p 1
+```
+- `--lang` accepts base ISO codes only (`en`, `zh`, `zh-Hant`, `ja`, `ko`); `zh-Hans` / `zh-CN` / `en-US` are normalized before upload.
+- Uploading adds a **new version** for `(cid, lang)`; older versions remain and stay visible in the list.
+- Review takes a few minutes: logged-in queries see the track immediately, anonymous playback only after approval.
+- Delete is soft: the entry first flips to `status=4` (visible for a short while), then the server drops it from the list. Use `subtitle-list --status deleted` right after deletion to audit.
 
 ## Detailed Reference
 

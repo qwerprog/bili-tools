@@ -714,6 +714,73 @@ pub enum VideoCommands {
         output: Option<PathBuf>,
     },
 
+    /// 上传本地 SRT 字幕到指定分P（客户端转 BCC 后提交，支持草稿与离线转换检查）
+    SubtitleUpload {
+        /// 视频 BV号、AV号、URL 或 b23.tv 短链接
+        video: String,
+
+        /// 待上传的字幕文件（当前仅支持 SRT）
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// 字幕语言代码（如 zh, en, zh-Hant, ja, ko；zh-Hans/zh-CN/en-US 会自动归一化）
+        #[arg(long, value_name = "CODE")]
+        lang: String,
+
+        /// 分P编号 (从 1 开始；默认取 URL 中的 p 参数或 1)
+        #[arg(short = 'p', long, value_parser = clap::value_parser!(u32).range(1..))]
+        page: Option<u32>,
+
+        /// 仅保存草稿，不提交审核 (submit=0)
+        #[arg(long)]
+        draft: bool,
+
+        /// 以自制字幕签名提交 (sign=1；默认 sign=0)
+        #[arg(long)]
+        sign: bool,
+
+        /// 只做 SRT→BCC 解析与转换，不发起任何网络请求
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// 查询当前账号的字幕轨（默认全账号，指定视频与分P时只显示该分P）
+    SubtitleList {
+        /// 视频 BV号、AV号、URL 或 b23.tv 短链接（可选；指定后按分P过滤）
+        #[arg(value_name = "VIDEO")]
+        video: Option<String>,
+
+        /// 分P编号 (从 1 开始；默认取 URL 中的 p 参数或 1)
+        #[arg(short = 'p', long = "part", value_parser = clap::value_parser!(u32).range(1..))]
+        page: Option<u32>,
+
+        /// 状态过滤 (all, draft, published, deleted)
+        #[arg(long, value_enum, default_value_t = SubtitleStatusFilter::All)]
+        status: SubtitleStatusFilter,
+
+        /// 账号字幕列表页码 (从 1 开始；指定 VIDEO 时扫描全部分页并按 cid 过滤)
+        #[arg(long = "page", default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..))]
+        page_num: u32,
+
+        /// 每页条数 (1-50)
+        #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u32).range(1..=50))]
+        page_size: u32,
+    },
+
+    /// 删除指定分P的字幕轨（软删除，条目 status 先变为 4，随后由服务端从列表移除）
+    SubtitleDelete {
+        /// 视频 BV号、AV号、URL 或 b23.tv 短链接
+        video: String,
+
+        /// 要删除的字幕 ID（可重复指定或一次传入多个，来自 subtitle-list 的 id_str）
+        #[arg(long = "id", value_name = "SUBTITLE_ID", num_args = 1.., required = true)]
+        ids: Vec<String>,
+
+        /// 分P编号 (从 1 开始；默认取 URL 中的 p 参数或 1)
+        #[arg(short = 'p', long = "part", value_parser = clap::value_parser!(u32).range(1..))]
+        page: Option<u32>,
+    },
+
     /// 获取视频 AI 总结与大纲
     Summary {
         /// 视频 BV号、AV号、URL 或 b23.tv 短链接
@@ -971,6 +1038,30 @@ pub enum VideoCommands {
     /// 创作中心后台稿件列表与转码审核状态查询（对标 biliup list / show）
     #[command(visible_alias = "archives", subcommand)]
     Studio(VideoStudioCommands),
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubtitleStatusFilter {
+    /// 全部状态
+    All,
+    /// 草稿 (status=1)
+    Draft,
+    /// 已发布 (status=5)
+    Published,
+    /// 已删除 (status=4)
+    Deleted,
+}
+
+impl SubtitleStatusFilter {
+    /// 匹配 `author/list` 返回记录里的 `status` 字段
+    pub fn matches(self, status: i64) -> bool {
+        match self {
+            Self::All => true,
+            Self::Draft => status == 1,
+            Self::Published => status == 5,
+            Self::Deleted => status == 4,
+        }
+    }
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

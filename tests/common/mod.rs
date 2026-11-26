@@ -299,6 +299,17 @@ pub struct MockComment {
 }
 
 #[derive(Debug, Clone)]
+pub struct MockSubtitle {
+    pub id_str: String,
+    pub oid: i64,
+    pub bvid: String,
+    pub lan: String,
+    pub status: i64,
+    pub mtime: i64,
+    pub data: Value,
+}
+
+#[derive(Debug, Clone)]
 pub struct MockState {
     pub port: u16,
     pub auth_logged_in: bool,
@@ -324,6 +335,8 @@ pub struct MockState {
     pub coined_videos: HashMap<i64, u32>,
     pub comments: Vec<MockComment>,
     pub next_rpid: i64,
+    pub subtitles: Vec<MockSubtitle>,
+    pub next_subtitle_id: i64,
     pub danmaku_xml_override: Option<String>,
     pub followed_mids: HashSet<i64>,
     pub short_links: HashMap<String, String>,
@@ -487,6 +500,8 @@ impl MockState {
             coined_videos: HashMap::new(),
             comments,
             next_rpid: 104192624481,
+            subtitles: Vec::new(),
+            next_subtitle_id: 2160000000000000001,
             danmaku_xml_override: None,
             followed_mids: HashSet::new(),
             short_links,
@@ -1437,6 +1452,177 @@ fn dispatch(
                 }]
             }
         })),
+
+        // ── Bilibili subtitle track management (dm/subtitle) ────────────────
+        ("POST", "/x/v2/dm/subtitle/draft/save") => {
+            if !st.auth_logged_in {
+                return unauth_response();
+            }
+            if req.form_param("csrf") != Some(st.bili_jct.as_str())
+                || req.form_param("csrf_token") != Some(st.bili_jct.as_str())
+            {
+                return HttpResponse::json(json!({
+                    "code": -111,
+                    "message": "csrf 校验失败",
+                    "ttl": 1
+                }));
+            }
+
+            let oid = req
+                .form_param("oid")
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(0);
+            let bvid = req.form_param("bvid").unwrap_or("").to_string();
+            let lan = req.form_param("lan").unwrap_or("").to_string();
+            let submit = req.form_param("submit").unwrap_or("0");
+            let data_raw = req.form_param("data").unwrap_or("");
+            let data = serde_json::from_str::<Value>(data_raw).ok();
+
+            if oid <= 0
+                || bvid.is_empty()
+                || lan.is_empty()
+                || submit.is_empty()
+                || !data.as_ref().is_some_and(|d| d["body"].is_array())
+            {
+                return HttpResponse::json(json!({
+                    "code": 79008,
+                    "message": "字幕不合法",
+                    "ttl": 1
+                }));
+            }
+            let data = data.unwrap();
+
+            let id = st.next_subtitle_id;
+            st.next_subtitle_id += 1;
+            let status = if submit == "1" { 5 } else { 1 };
+            let mtime = 1795700000 + st.subtitles.len() as i64;
+            st.subtitles.push(MockSubtitle {
+                id_str: id.to_string(),
+                oid,
+                bvid,
+                lan,
+                status,
+                mtime,
+                data,
+            });
+
+            HttpResponse::json(json!({
+                "code": 0,
+                "message": "0",
+                "ttl": 1,
+                "data": { "subtitle_id": id.to_string() }
+            }))
+        }
+
+        ("GET", "/x/v2/dm/subtitle/search/author/list") => {
+            if !st.auth_logged_in {
+                return unauth_response();
+            }
+            let page = req
+                .query_param("page")
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(1)
+                .max(1);
+            let size = req
+                .query_param("size")
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(20)
+                .clamp(1, 50);
+            let status_filter = req
+                .query_param("status")
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(0);
+
+            let mut items: Vec<&MockSubtitle> = st
+                .subtitles
+                .iter()
+                .filter(|s| status_filter == 0 || s.status == status_filter)
+                .collect();
+            items.sort_by_key(|s| std::cmp::Reverse(s.mtime));
+
+            let total = items.len() as i64;
+            let start = ((page - 1) * size) as usize;
+            let subtitles: Vec<Value> = items
+                .iter()
+                .skip(start)
+                .take(size as usize)
+                .map(|s| {
+                    json!({
+                        "id": s.id_str.parse::<i64>().unwrap_or(0),
+                        "id_str": s.id_str,
+                        "oid": s.oid,
+                        "aid": 79677524,
+                        "bvid": s.bvid,
+                        "type": 1,
+                        "archive_name": format!("Mock Video {}", s.bvid),
+                        "video_name": format!("Mock Video {} 分P视频", s.bvid),
+                        "lan": s.lan,
+                        "lan_doc": match s.lan.as_str() {
+                            "zh" => "中文",
+                            "en" => "英语",
+                            _ => "其他",
+                        },
+                        "status": s.status,
+                        "is_sign": false,
+                        "is_lock": false,
+                        "mtime": s.mtime
+                    })
+                })
+                .collect();
+
+            let publish_count = st.subtitles.iter().filter(|s| s.status == 5).count() as i64;
+            let draft_count = st.subtitles.iter().filter(|s| s.status == 1).count() as i64;
+            HttpResponse::json(json!({
+                "code": 0,
+                "message": "OK",
+                "ttl": 1,
+                "data": {
+                    "page": { "num": page, "size": size, "total": total },
+                    "subtitles": subtitles,
+                    "total": total,
+                    "draft_count": draft_count,
+                    "audit_count": 0,
+                    "back_count": 0,
+                    "publish_count": publish_count
+                }
+            }))
+        }
+
+        ("POST", "/x/v2/dm/subtitle/del") => {
+            if !st.auth_logged_in {
+                return unauth_response();
+            }
+            if req.form_param("csrf") != Some(st.bili_jct.as_str())
+                || req.form_param("csrf_token") != Some(st.bili_jct.as_str())
+            {
+                return HttpResponse::json(json!({
+                    "code": -111,
+                    "message": "csrf 校验失败",
+                    "ttl": 1
+                }));
+            }
+            let oid = req
+                .form_param("oid")
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(0);
+            let subtitle_id = req.form_param("subtitle_id").unwrap_or("");
+
+            match st
+                .subtitles
+                .iter_mut()
+                .find(|s| s.id_str == subtitle_id && s.oid == oid)
+            {
+                Some(entry) => {
+                    entry.status = 4;
+                    HttpResponse::json(json!({ "code": 0, "message": "0", "ttl": 1 }))
+                }
+                None => HttpResponse::json(json!({
+                    "code": -400,
+                    "message": "请求错误",
+                    "ttl": 1
+                })),
+            }
+        }
 
         ("GET", "/x/web-interface/view/conclusion/get") => HttpResponse::json(json!({
             "code": 0,
