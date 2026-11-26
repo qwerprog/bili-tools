@@ -20,7 +20,7 @@
 | `auth` | `login`, `status`, `logout`, `refresh`, `daily` |
 | `live` | `start`, `stop`, `status`, `info`, `title`, `area`, `following`, `stream`, `danmaku`, `chat`, `send`, `record` |
 | `search` | `video`, `user`, `live`, `hot` |
-| `video` | `info`, `streams`, `subtitle`, `summary`, `tags`, `related`, `danmaku`, `comments`, `comment (post\|like\|delete)`, `like`, `coin`, `triple`, `download`, `upload`, `append`, `replace`, `edit`, `studio (ls\|show)` |
+| `video` | `info`, `streams`, `subtitle`, `summary`, `tags`, `related`, `danmaku`, `comments`, `comment (post\|like\|delete)`, `like`, `coin`, `triple`, `download`, `upload`, `append`, `replace`, `edit`, `topics`, `studio (ls\|show)` |
 | `user` | `info`, `videos`, `dynamics`, `follow`, `unfollow` |
 | `feed` | `bit feed [--type all\|video\|article] [--offset <CURSOR>]` |
 | `rank` | `video`, `popular` |
@@ -41,6 +41,7 @@
 - `--line`: `bda2`, `qn`, `ws`, `tx`, `bldsa` (UPOS CDN line).
 - `--tid <TID>`: Bilibili partition ID (e.g., `171` 电子竞技, `17` 单机游戏, `122` 野生技术协会).
 - `--copyright <1|2>`: `1` original (default), `2` repost (requires `--source`).
+- `--topic <NAME>` / `--topic-id <ID>` / `--mission-id <ID>`: bind official Bilibili campaign/activity tag (also supported in `video edit`; query available activities with `bit video topics`).
 
 ## JSON Error Envelope Kinds
 

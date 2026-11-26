@@ -868,59 +868,7 @@ pub enum VideoCommands {
 
     /// 向 B 站上传视频投稿（支持多P并发分块上传、线路优选、封面与定时发布，对标 biliup upload）
     #[command(visible_alias = "up")]
-    Upload {
-        /// 待上传的本地视频文件路径（传入多个文件自动合成为多P稿件）
-        #[arg(value_name = "FILE", num_args = 1.., required = true)]
-        files: Vec<PathBuf>,
-
-        /// 稿件标题（留空默认取首个视频文件名，最长 80 字）
-        #[arg(short = 't', long)]
-        title: Option<String>,
-
-        /// 投稿分区 ID（如 171=电子竞技, 17=单机游戏, 122=野生技术协会, 21=日常）
-        #[arg(long, default_value_t = 171, value_parser = clap::value_parser!(u32).range(1..))]
-        tid: u32,
-
-        /// 视频标签（多个用英文或中文逗号分隔，最多 10 个；留空默认按标题生成）
-        #[arg(long)]
-        tag: Option<String>,
-
-        /// 视频简介
-        #[arg(long, default_value = "")]
-        desc: String,
-
-        /// 版权类型：1=自制（默认），2=转载（需配合 --source）
-        #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=2))]
-        copyright: u8,
-
-        /// 转载来源网址（当 --copyright 2 时必填）
-        #[arg(long, default_value = "")]
-        source: String,
-
-        /// 自定义封面（支持本地图片路径 jpg/png/webp 自动上传，或远程 https URL）
-        #[arg(long, value_name = "IMAGE")]
-        cover: Option<String>,
-
-        /// 粉丝动态文案
-        #[arg(long, default_value = "")]
-        dynamic: String,
-
-        /// 定时发布时间（支持 Unix 秒级时间戳，或相对偏移如 +4h / +2h30m）
-        #[arg(long, value_name = "TIME")]
-        dtime: Option<String>,
-
-        /// 自制稿件启用“未经作者授权禁止转载”声明
-        #[arg(long)]
-        no_reprint: bool,
-
-        /// UPOS 上传线路 (auto, bda2, ws, qn, cos/tx, txa, alia, bldsa)
-        #[arg(short = 'l', long, value_enum, default_value_t = UploadLine::Auto)]
-        line: UploadLine,
-
-        /// 单文件最大并发上传线程数 (1-16)
-        #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u32).range(1..=16))]
-        limit: u32,
-    },
+    Upload(Box<VideoUploadArgs>),
 
     /// 向已有视频稿件追加新的分P视频（对标 biliup append）
     Append {
@@ -968,12 +916,102 @@ pub enum VideoCommands {
         limit: u32,
     },
 
-    /// 编辑已有稿件的元数据（标题、分区、标签、简介、16:9/4:3封面、版权、动态文案、禁转声明等；未指定字段保持原值）
+    /// 编辑已有稿件的元数据（标题、分区、标签、活动标签、简介、16:9/4:3封面、版权、动态文案、禁转声明等；未指定字段保持原值）
     Edit(Box<VideoEditArgs>),
+
+    /// 查询或搜索 B 站创作中心可用的投稿话题与活动标签 (topic_id / mission_id)
+    Topics {
+        /// 按关键词搜索话题或活动名称（留空则按分区列出推荐活动话题）
+        #[arg(short = 'k', long)]
+        keyword: Option<String>,
+
+        /// 按分区 ID 筛选推荐话题（未指定 --keyword 时生效，如 231, 171）
+        #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
+        tid: Option<u32>,
+
+        /// 仅显示绑定了官方征稿活动 (mission_id > 0) 的活动标签
+        #[arg(long)]
+        activity_only: bool,
+
+        /// 分页页码 (从 1 开始)
+        #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..))]
+        page: u32,
+
+        /// 每页条数 (1-50)
+        #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u32).range(1..=50))]
+        page_size: u32,
+    },
 
     /// 创作中心后台稿件列表与转码审核状态查询（对标 biliup list / show）
     #[command(visible_alias = "archives", subcommand)]
     Studio(VideoStudioCommands),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct VideoUploadArgs {
+    /// 待上传的本地视频文件路径（传入多个文件自动合成为多P稿件）
+    #[arg(value_name = "FILE", num_args = 1.., required = true)]
+    pub files: Vec<PathBuf>,
+
+    /// 稿件标题（留空默认取首个视频文件名，最长 80 字）
+    #[arg(short = 't', long)]
+    pub title: Option<String>,
+
+    /// 投稿分区 ID（如 171=电子竞技, 17=单机游戏, 122=野生技术协会, 21=日常）
+    #[arg(long, default_value_t = 171, value_parser = clap::value_parser!(u32).range(1..))]
+    pub tid: u32,
+
+    /// 视频标签（多个用英文或中文逗号分隔，最多 10 个；留空默认按标题生成）
+    #[arg(long)]
+    pub tag: Option<String>,
+
+    /// 按名称搜索并绑定官方活动/话题标签（自动解析 topic_id 与 mission_id，并将活动名补入标签首位）
+    #[arg(long, value_name = "NAME")]
+    pub topic: Option<String>,
+
+    /// 直接指定活动/话题 ID (topic_id)
+    #[arg(long, value_name = "ID")]
+    pub topic_id: Option<i64>,
+
+    /// 直接指定官方征稿活动 ID (mission_id)
+    #[arg(long, value_name = "ID")]
+    pub mission_id: Option<i64>,
+
+    /// 视频简介
+    #[arg(long, default_value = "")]
+    pub desc: String,
+
+    /// 版权类型：1=自制（默认），2=转载（需配合 --source）
+    #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=2))]
+    pub copyright: u8,
+
+    /// 转载来源网址（当 --copyright 2 时必填）
+    #[arg(long, default_value = "")]
+    pub source: String,
+
+    /// 自定义封面（支持本地图片路径 jpg/png/webp 自动上传，或远程 https URL）
+    #[arg(long, value_name = "IMAGE")]
+    pub cover: Option<String>,
+
+    /// 粉丝动态文案
+    #[arg(long, default_value = "")]
+    pub dynamic: String,
+
+    /// 定时发布时间（支持 Unix 秒级时间戳，或相对偏移如 +4h / +2h30m）
+    #[arg(long, value_name = "TIME")]
+    pub dtime: Option<String>,
+
+    /// 自制稿件启用“未经作者授权禁止转载”声明
+    #[arg(long)]
+    pub no_reprint: bool,
+
+    /// UPOS 上传线路 (auto, bda2, ws, qn, cos/tx, txa, alia, bldsa)
+    #[arg(short = 'l', long, value_enum, default_value_t = UploadLine::Auto)]
+    pub line: UploadLine,
+
+    /// 单文件最大并发上传线程数 (1-16)
+    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u32).range(1..=16))]
+    pub limit: u32,
 }
 
 #[derive(clap::Args, Debug)]
@@ -993,6 +1031,18 @@ pub struct VideoEditArgs {
     /// 修改视频标签（多个用英文或中文逗号分隔，最多 10 个）
     #[arg(long)]
     pub tag: Option<String>,
+
+    /// 按名称搜索并绑定/切换活动标签（自动解析 topic_id 与 mission_id，并将活动名补入标签首位）
+    #[arg(long, value_name = "NAME")]
+    pub topic: Option<String>,
+
+    /// 直接设置或清除活动/话题 ID（传 0 清除绑定；不传则保留原值）
+    #[arg(long, value_name = "ID")]
+    pub topic_id: Option<i64>,
+
+    /// 直接设置或清除官方征稿活动 ID（传 0 清除绑定；不传则保留原值）
+    #[arg(long, value_name = "ID")]
+    pub mission_id: Option<i64>,
 
     /// 修改视频简介
     #[arg(long)]
@@ -2152,6 +2202,12 @@ mod tests {
             "122",
             "--tag",
             "Rust,Linux",
+            "--topic",
+            "影视神仙剪刀手",
+            "--topic-id",
+            "1105274",
+            "--mission-id",
+            "4071918",
             "-l",
             "tx",
             "--limit",
@@ -2160,14 +2216,15 @@ mod tests {
         .unwrap();
         assert!(matches!(
             up.command,
-            Some(Commands::Video(VideoCommands::Upload {
-                ref files,
-                title: Some(ref t),
-                tid: 122,
-                line: UploadLine::Cos,
-                limit: 4,
-                ..
-            })) if files.len() == 2 && t == "录播合集"
+            Some(Commands::Video(VideoCommands::Upload(ref args)))
+                if args.files.len() == 2
+                    && args.title.as_deref() == Some("录播合集")
+                    && args.tid == 122
+                    && args.topic.as_deref() == Some("影视神仙剪刀手")
+                    && args.topic_id == Some(1105274)
+                    && args.mission_id == Some(4071918)
+                    && args.line == UploadLine::Cos
+                    && args.limit == 4
         ));
         assert!(
             Cli::try_parse_from(["bit", "video", "append", "BV1xx", "p3.mp4", "-l", "bda2"])
@@ -2204,6 +2261,12 @@ mod tests {
             "231",
             "--tag",
             "广播剧,双语",
+            "--topic",
+            "影视神仙剪刀手",
+            "--topic-id",
+            "1105274",
+            "--mission-id",
+            "4071918",
             "--desc",
             "新简介",
             "--cover",
@@ -2221,6 +2284,9 @@ mod tests {
                     && args.title.as_deref() == Some("改后标题")
                     && args.tid == Some(231)
                     && args.tag.as_deref() == Some("广播剧,双语")
+                    && args.topic.as_deref() == Some("影视神仙剪刀手")
+                    && args.topic_id == Some(1105274)
+                    && args.mission_id == Some(4071918)
                     && args.desc.as_deref() == Some("新简介")
                     && args.cover.as_deref() == Some("c16x9.png")
                     && args.cover43.as_deref() == Some("c4x3.png")
@@ -2230,6 +2296,31 @@ mod tests {
         assert!(
             Cli::try_parse_from(["bit", "video", "edit", "BV1xx", "--copyright", "3"]).is_err()
         );
+        let tp = Cli::try_parse_from([
+            "bit",
+            "video",
+            "topics",
+            "-k",
+            "影视",
+            "--tid",
+            "231",
+            "--activity-only",
+            "--page",
+            "2",
+            "--page-size",
+            "10",
+        ])
+        .unwrap();
+        assert!(matches!(
+            tp.command,
+            Some(Commands::Video(VideoCommands::Topics {
+                keyword: Some(ref k),
+                tid: Some(231),
+                activity_only: true,
+                page: 2,
+                page_size: 10,
+            })) if k == "影视"
+        ));
         assert!(
             Cli::try_parse_from(["bit", "video", "studio", "ls", "--status", "pubing"]).is_ok()
         );

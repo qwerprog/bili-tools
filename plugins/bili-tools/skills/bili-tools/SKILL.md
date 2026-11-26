@@ -81,10 +81,13 @@ bit live record 76 --danmaku -w -o live.flv
 ### 7. Upload & Studio Management (Confirm Before Running)
 ```bash
 bit --json video studio ls
-bit --json video upload demo.mp4 --title "标题" --tid 171 --tag "工具,CLI"
+bit --json video topics --tid 231 --activity-only
+bit --json video upload demo.mp4 --title "标题" --tid 171 --tag "工具,CLI" --topic "活动话题名"
 bit --json video append <BVID> part2.mp4
 # Replace part 1's video file in place (keeps BV & stats; optional new title; re-review required):
 bit --json video replace <BVID> new.mp4 -p 1 -t "新标题"
+# Edit existing archive metadata (preserves unspecified fields & video parts):
+bit --json video edit <BVID> --topic "活动话题名" --cover43 cover-4x3.png
 ```
 
 ## Detailed Reference

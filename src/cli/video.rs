@@ -1807,21 +1807,25 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             }
         }
 
-        VideoCommands::Upload {
-            files,
-            title,
-            tid,
-            tag,
-            desc,
-            copyright,
-            source,
-            cover,
-            dynamic,
-            dtime,
-            no_reprint,
-            line,
-            limit,
-        } => {
+        VideoCommands::Upload(args) => {
+            let crate::cli::args::VideoUploadArgs {
+                files,
+                title,
+                tid,
+                tag,
+                topic,
+                topic_id,
+                mission_id,
+                desc,
+                copyright,
+                source,
+                cover,
+                dynamic,
+                dtime,
+                no_reprint,
+                line,
+                limit,
+            } = *args;
             // 1. 所有本地参数与文件存在性前置校验（避免大文件上传完才因标题/转载来源缺失失败）
             for f in &files {
                 let m = std::fs::metadata(f).map_err(|e| {
@@ -1857,7 +1861,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 ));
             }
 
-            let effective_tag = match tag {
+            let mut effective_tag = match tag {
                 Some(ref raw) => crate::api::upload::normalize_tags(raw)?,
                 None => "视频,日常".to_string(),
             };
@@ -1865,6 +1869,33 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             let parsed_dtime = dtime.as_deref().map(parse_schedule_dtime).transpose()?;
 
             let cookies = crate::auth::ensure_csrf()?;
+
+            let resolved_topic = match topic {
+                Some(ref q) if !q.trim().is_empty() => {
+                    user_info!("正在解析活动/话题「{}」...", q.trim());
+                    Some(crate::api::upload::resolve_studio_topic(
+                        &cookies,
+                        q,
+                        Some(tid),
+                    )?)
+                }
+                _ => None,
+            };
+            let effective_topic_id = topic_id
+                .or_else(|| resolved_topic.as_ref().map(|t| t.topic_id))
+                .filter(|&id| id > 0);
+            let effective_mission_id = mission_id
+                .or_else(|| {
+                    resolved_topic
+                        .as_ref()
+                        .map(|t| t.mission_id)
+                        .filter(|&id| id > 0)
+                })
+                .filter(|&id| id > 0);
+            if let Some(ref rt) = resolved_topic {
+                effective_tag =
+                    crate::api::upload::ensure_topic_tag(&effective_tag, &rt.topic_name)?;
+            }
 
             let cover_url = match cover {
                 Some(ref c) if !c.trim().is_empty() => {
@@ -1914,6 +1945,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 dynamic,
                 dtime: parsed_dtime,
                 no_reprint,
+                topic_id: effective_topic_id,
+                mission_id: effective_mission_id,
             };
             let res = crate::api::upload::submit_archive(&cookies, &submit_params)?;
             let bvid = res["bvid"].as_str().unwrap_or("").to_string();
@@ -1927,12 +1960,14 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     "title": effective_title,
                     "tid": tid,
                     "tag": effective_tag,
+                    "topic_id": effective_topic_id.unwrap_or(0),
+                    "mission_id": effective_mission_id.unwrap_or(0),
                     "cover": cover_url,
                     "parts": uploaded_parts,
                     "data": res,
                 }))?;
             } else {
-                let card = InfoCard::new("🎉 视频稿件投递成功")
+                let mut card = InfoCard::new("🎉 视频稿件投递成功")
                     .with_badge(
                         if bvid.is_empty() {
                             format!("av{aid}")
@@ -1950,6 +1985,19 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     .add_plain_row("分P数量", uploaded_parts.len().to_string())
                     .add_plain_row("分区 TID", tid.to_string())
                     .add_plain_row("标签", &effective_tag);
+                if let Some(tid_val) = effective_topic_id {
+                    let topic_disp = match (&resolved_topic, effective_mission_id) {
+                        (Some(rt), Some(mid)) => {
+                            format!("{} (topic_id={}, mission_id={})", rt.topic_name, tid_val, mid)
+                        }
+                        (Some(rt), None) => format!("{} (topic_id={})", rt.topic_name, tid_val),
+                        (None, Some(mid)) => format!("topic_id={}, mission_id={}", tid_val, mid),
+                        (None, None) => format!("topic_id={}", tid_val),
+                    };
+                    card = card.add_plain_row("活动/话题", topic_disp);
+                } else if let Some(mid) = effective_mission_id {
+                    card = card.add_plain_row("征稿活动", format!("mission_id={mid}"));
+                }
                 print_spacer();
                 card.print();
                 print_spacer();
@@ -2147,6 +2195,9 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 title,
                 tid,
                 tag,
+                topic,
+                topic_id,
+                mission_id,
                 desc,
                 copyright,
                 source,
@@ -2159,6 +2210,9 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             if title.is_none()
                 && tid.is_none()
                 && tag.is_none()
+                && topic.is_none()
+                && topic_id.is_none()
+                && mission_id.is_none()
                 && desc.is_none()
                 && copyright.is_none()
                 && source.is_none()
@@ -2168,7 +2222,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 && no_reprint.is_none()
             {
                 return Err(BiliLiveError::Input(
-                    "至少需要指定一个要修改的字段（如 --title / --tid / --tag / --desc / --cover / --cover43 等）"
+                    "至少需要指定一个要修改的字段（如 --title / --tid / --tag / --topic / --desc / --cover / --cover43 等）"
                         .to_string(),
                 ));
             }
@@ -2177,7 +2231,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 .as_deref()
                 .map(crate::api::upload::validate_archive_title)
                 .transpose()?;
-            let validated_tag = tag
+            let mut validated_tag = tag
                 .as_deref()
                 .map(crate::api::upload::normalize_tags)
                 .transpose()?;
@@ -2191,6 +2245,9 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             }
             if validated_tag.is_some() {
                 changed_labels.push("标签");
+            }
+            if topic.is_some() || topic_id.is_some() || mission_id.is_some() {
+                changed_labels.push("活动/话题");
             }
             if desc.is_some() {
                 changed_labels.push("简介");
@@ -2232,10 +2289,49 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 ));
             }
 
-            let prompt = format!(
-                "将修改稿件《{existing_title}》({bvid}) 的 {}，确认提交？",
+            let effective_tid_for_topic =
+                tid.or_else(|| arc["tid"].as_u64().and_then(|v| u32::try_from(v).ok()));
+            let resolved_topic = match topic {
+                Some(ref q) if !q.trim().is_empty() => {
+                    user_info!("正在解析活动/话题「{}」...", q.trim());
+                    Some(crate::api::upload::resolve_studio_topic(
+                        &cookies,
+                        q,
+                        effective_tid_for_topic,
+                    )?)
+                }
+                _ => None,
+            };
+            let patch_topic_id = topic_id.or_else(|| resolved_topic.as_ref().map(|t| t.topic_id));
+            let patch_mission_id = mission_id.or_else(|| {
+                resolved_topic.as_ref().map(|t| t.mission_id)
+            });
+            if let Some(ref rt) = resolved_topic {
+                let base_tags = validated_tag
+                    .as_deref()
+                    .unwrap_or_else(|| arc["tag"].as_str().unwrap_or(""));
+                validated_tag = Some(crate::api::upload::ensure_topic_tag(
+                    base_tags,
+                    &rt.topic_name,
+                )?);
+                if !changed_labels.contains(&"标签") {
+                    changed_labels.push("标签");
+                }
+            }
+
+            let mut prompt = format!(
+                "将修改稿件《{existing_title}》({bvid}) 的 {}",
                 changed_labels.join("、")
             );
+            if let Some(ref rt) = resolved_topic {
+                prompt.push_str(&format!(
+                    "（活动/话题：{}，topic_id={}，mission_id={}）",
+                    rt.topic_name,
+                    patch_topic_id.unwrap_or(rt.topic_id),
+                    patch_mission_id.unwrap_or(rt.mission_id)
+                ));
+            }
+            prompt.push_str("，确认提交？");
             if !crate::cli::output::confirm_action(&prompt)? {
                 user_warning!("已取消编辑");
                 return Ok(());
@@ -2275,6 +2371,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 cover43: uploaded_cover43,
                 dynamic,
                 no_reprint,
+                topic_id: patch_topic_id,
+                mission_id: patch_mission_id,
             };
             let outcome =
                 crate::api::upload::edit_archive_metadata(&cookies, &existing, &patch)?;
@@ -2288,6 +2386,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     "title": outcome.title,
                     "tid": outcome.tid,
                     "tag": outcome.tag,
+                    "topic_id": outcome.topic_id,
+                    "mission_id": outcome.mission_id,
                     "desc": outcome.desc,
                     "copyright": outcome.copyright,
                     "source": outcome.source,
@@ -2305,6 +2405,83 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     changed_labels.join("、")
                 );
             }
+        }
+
+        VideoCommands::Topics {
+            keyword,
+            tid,
+            activity_only,
+            page,
+            page_size,
+        } => {
+            let cookies = crate::auth::ensure_login()?;
+            let mut topics = match keyword.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                Some(kw) => {
+                    let offset = page.saturating_sub(1).saturating_mul(page_size);
+                    crate::api::upload::search_studio_topics(&cookies, kw, page_size, offset)?
+                }
+                None => crate::api::upload::list_studio_topics(&cookies, tid, page, page_size)?,
+            };
+            if activity_only {
+                topics.retain(|t| t.is_activity || t.mission_id > 0);
+            }
+
+            if is_json() {
+                print_json(&json!({
+                    "count": topics.len(),
+                    "topics": topics,
+                }))?;
+                return Ok(());
+            }
+
+            let subtitle = match (&keyword, tid) {
+                (Some(kw), _) => format!("关键词「{}」· 共 {} 条", kw.trim(), topics.len()),
+                (None, Some(t)) => format!("分区 TID {t} · 共 {} 条", topics.len()),
+                (None, None) => format!("共 {} 条", topics.len()),
+            };
+            print_spacer();
+            print_section_header("创作中心投稿活动与话题", Some(&subtitle));
+            print_spacer();
+
+            if topics.is_empty() {
+                user_info!("未找到匹配的投稿活动或话题");
+                print_spacer();
+                return Ok(());
+            }
+
+            let cols = [
+                Column::left("topic_id", 10),
+                Column::left("话题/活动标签", 24),
+                Column::left("mission_id", 12),
+                Column::left("活动说明", 36),
+            ];
+            let rows: Vec<Vec<Cell>> = topics
+                .iter()
+                .map(|t| {
+                    let mission_cell = if t.mission_id > 0 {
+                        Cell::colored(t.mission_id.to_string(), Color::Green)
+                    } else {
+                        Cell::muted("-")
+                    };
+                    let info = if !t.mission_name.is_empty() {
+                        t.mission_name.as_str()
+                    } else if !t.activity_text.is_empty() {
+                        t.activity_text.as_str()
+                    } else if !t.description.is_empty() {
+                        t.description.as_str()
+                    } else {
+                        "-"
+                    };
+                    vec![
+                        Cell::cyan(t.topic_id.to_string()),
+                        Cell::bold_colored(&t.topic_name, Color::White),
+                        mission_cell,
+                        Cell::muted(info),
+                    ]
+                })
+                .collect();
+            print_table(&cols, &rows);
+            print_spacer();
         }
 
         VideoCommands::Studio(sub) => match sub {

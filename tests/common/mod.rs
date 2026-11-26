@@ -2964,13 +2964,89 @@ fn dispatch(
                         "copyright": 1,
                         "state": 0,
                         "state_desc": "开放浏览",
-                        "reject_reason": ""
+                        "reject_reason": "",
+                        "topic_id": 1105274i64,
+                        "mission_id": 4071918i64
                     },
                     "videos": [
                         { "filename": "orig_p1", "title": "P1 上半场", "desc": "", "cid": 10001, "status": 0, "status_desc": "转码通过" },
                         { "filename": "orig_p2", "title": "P2 下半场", "desc": "", "cid": 10002, "status": 0, "status_desc": "转码通过" }
                     ]
                 }
+            }))
+        }
+
+        ("GET", "/x/vupre/web/topic/type") => {
+            if !st.auth_logged_in {
+                return unauth_response();
+            }
+            HttpResponse::json(json!({
+                "code": 0,
+                "message": "0",
+                "data": {
+                    "topics": [
+                        {
+                            "topic_id": 1105274i64,
+                            "topic_name": "影视神仙剪刀手",
+                            "mission_id": 4071918i64,
+                            "mission_name": "神仙剪刀手13.0",
+                            "description": "每周投稿瓜分万元奖金",
+                            "activity_text": "有奖活动"
+                        },
+                        {
+                            "topic_id": 1336418i64,
+                            "topic_name": "影视未来星企划",
+                            "mission_id": 4072350i64,
+                            "mission_name": "2026影视未来星企划3.0",
+                            "description": "寻找影视新星",
+                            "activity_text": "流量扶持"
+                        },
+                        {
+                            "topic_id": 999001i64,
+                            "topic_name": "普通讨论话题",
+                            "mission_id": 0i64,
+                            "description": "无活动绑定"
+                        }
+                    ]
+                }
+            }))
+        }
+
+        ("GET", "/x/vupre/web/topic/search") => {
+            if !st.auth_logged_in {
+                return unauth_response();
+            }
+            let kw = req.query_param("keywords").unwrap_or("");
+            let all = vec![
+                json!({
+                    "id": 1105274i64,
+                    "name": "影视神仙剪刀手",
+                    "mission_id": 4071918i64,
+                    "mission_name": "神仙剪刀手13.0",
+                    "description": "每周投稿瓜分万元奖金",
+                    "activity_text": "有奖活动"
+                }),
+                json!({
+                    "id": 1336418i64,
+                    "name": "影视未来星企划",
+                    "mission_id": 4072350i64,
+                    "mission_name": "2026影视未来星企划3.0",
+                    "description": "寻找影视新星",
+                    "activity_text": "流量扶持"
+                }),
+            ];
+            let matched: Vec<Value> = all
+                .into_iter()
+                .filter(|item| {
+                    kw.is_empty()
+                        || item["name"].as_str().unwrap_or("").contains(kw)
+                        || item["mission_name"].as_str().unwrap_or("").contains(kw)
+                })
+                .collect();
+            HttpResponse::json(json!({
+                "code": 0,
+                "message": "0",
+                "data": { "result": { "topics": matched } }
             }))
         }
 

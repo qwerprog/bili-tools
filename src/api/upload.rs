@@ -115,6 +115,20 @@ pub struct ArchiveSubmitParams {
     pub dynamic: String,
     pub dtime: Option<i64>,
     pub no_reprint: bool,
+    pub topic_id: Option<i64>,
+    pub mission_id: Option<i64>,
+}
+
+/// 创作中心投稿话题 / 活动标签
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StudioTopic {
+    pub topic_id: i64,
+    pub topic_name: String,
+    pub mission_id: i64,
+    pub mission_name: String,
+    pub description: String,
+    pub activity_text: String,
+    pub is_activity: bool,
 }
 
 fn now_millis() -> u128 {
@@ -713,6 +727,225 @@ pub fn normalize_tags(raw: &str) -> Result<String> {
     Ok(tags.join(","))
 }
 
+/// 确保活动话题名出现在标签列表中（若尚不存在则置顶插入首位，同时遵守最多 10 个标签限制）
+pub fn ensure_topic_tag(existing_tags: &str, topic_name: &str) -> Result<String> {
+    let topic = topic_name.trim();
+    if topic.is_empty() {
+        return normalize_tags(existing_tags);
+    }
+    let mut tags: Vec<&str> = existing_tags
+        .split([',', '，'])
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    if tags.iter().any(|t| t.eq_ignore_ascii_case(topic)) {
+        if tags.len() > 10 {
+            return Err(BiliLiveError::Input(format!(
+                "B 站单个稿件最多支持 10 个标签，当前提供了 {} 个",
+                tags.len()
+            )));
+        }
+        return Ok(tags.join(","));
+    }
+    if tags.len() >= 10 {
+        return Err(BiliLiveError::Input(format!(
+            "添加活动标签「{topic}」将超过 10 个标签上限（当前已有 {} 个），请先精简 --tag 后重试",
+            tags.len()
+        )));
+    }
+    tags.insert(0, topic);
+    Ok(tags.join(","))
+}
+
+fn parse_topic_item(item: &Value) -> Option<StudioTopic> {
+    let topic_id = item["topic_id"]
+        .as_i64()
+        .or_else(|| item["id"].as_i64())
+        .filter(|&id| id > 0)?;
+    let topic_name = item["topic_name"]
+        .as_str()
+        .or_else(|| item["name"].as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?
+        .to_string();
+    let mission_id = item["mission_id"].as_i64().unwrap_or(0);
+    let mission_name = item["mission_name"]
+        .as_str()
+        .or_else(|| item["activity_name"].as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let description = item["description"].as_str().unwrap_or("").trim().to_string();
+    let activity_text = item["activity_text"]
+        .as_str()
+        .or_else(|| item["activity_description"].as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let is_activity = mission_id > 0
+        || item["is_activity"].as_bool().unwrap_or(false)
+        || !activity_text.is_empty();
+    Some(StudioTopic {
+        topic_id,
+        topic_name,
+        mission_id,
+        mission_name,
+        description,
+        activity_text,
+        is_activity,
+    })
+}
+
+pub(crate) fn parse_topic_list(data: &Value) -> Vec<StudioTopic> {
+    let arr = data["topics"]
+        .as_array()
+        .or_else(|| data["result"]["topics"].as_array())
+        .or_else(|| data["list"].as_array())
+        .or_else(|| data.as_array());
+    arr.map(|items| items.iter().filter_map(parse_topic_item).collect())
+        .unwrap_or_default()
+}
+
+/// 按分区列出创作中心推荐的投稿话题与活动标签 (`GET /x/vupre/web/topic/type`)
+pub fn list_studio_topics(
+    cookies: &Cookies,
+    tid: Option<u32>,
+    page: u32,
+    page_size: u32,
+) -> Result<Vec<StudioTopic>> {
+    let pn = page.saturating_sub(1).to_string();
+    let ps = page_size.clamp(1, 50).to_string();
+    let mut pairs: Vec<(&str, String)> = vec![("pn", pn), ("ps", ps)];
+    if let Some(t) = tid {
+        pairs.push(("type_id", t.to_string()));
+    }
+    let query = serde_urlencoded::to_string(&pairs)
+        .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let url = format!(
+        "{}/x/vupre/web/topic/type?{query}",
+        crate::api::client::member_api_base_url()
+    );
+    let resp = crate::api::client::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Referer", "https://member.bilibili.com/")
+        .with_header("Cookie", cookies.cookie_header())
+        .send()?;
+    let json: Value = crate::api::client::parse_json_response(&resp, "获取创作中心活动话题列表失败")?;
+    if json["code"].as_i64() != Some(0) {
+        return Err(BiliLiveError::Api(format!(
+            "获取创作中心活动话题列表失败 ({}): {}",
+            json["code"].as_i64().unwrap_or(-1),
+            json["message"].as_str().unwrap_or("未知错误")
+        )));
+    }
+    Ok(parse_topic_list(&json["data"]))
+}
+
+/// 按关键词搜索创作中心投稿话题与活动标签 (`GET /x/vupre/web/topic/search`)
+pub fn search_studio_topics(
+    cookies: &Cookies,
+    keywords: &str,
+    page_size: u32,
+    offset: u32,
+) -> Result<Vec<StudioTopic>> {
+    let kw = keywords.trim();
+    if kw.is_empty() {
+        return Err(BiliLiveError::Input("话题搜索关键词不能为空".to_string()));
+    }
+    let query = serde_urlencoded::to_string([
+        ("keywords", kw),
+        ("page_size", &page_size.clamp(1, 50).to_string()),
+        ("offset", &offset.to_string()),
+    ])
+    .map_err(|e| BiliLiveError::Parse(e.to_string()))?;
+    let url = format!(
+        "{}/x/vupre/web/topic/search?{query}",
+        crate::api::client::member_api_base_url()
+    );
+    let resp = crate::api::client::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Referer", "https://member.bilibili.com/")
+        .with_header("Cookie", cookies.cookie_header())
+        .send()?;
+    let json: Value = crate::api::client::parse_json_response(&resp, "搜索创作中心活动话题失败")?;
+    if json["code"].as_i64() != Some(0) {
+        return Err(BiliLiveError::Api(format!(
+            "搜索创作中心活动话题失败 ({}): {}",
+            json["code"].as_i64().unwrap_or(-1),
+            json["message"].as_str().unwrap_or("未知错误")
+        )));
+    }
+    Ok(parse_topic_list(&json["data"]))
+}
+
+/// 按名称解析活动/话题（先调搜索接口，无结果时回退分区列表；优先精确匹配活动名/话题名）
+pub fn resolve_studio_topic(
+    cookies: &Cookies,
+    query: &str,
+    tid: Option<u32>,
+) -> Result<StudioTopic> {
+    let q = query.trim();
+    if q.is_empty() {
+        return Err(BiliLiveError::Input("活动/话题名称不能为空".to_string()));
+    }
+
+    let mut candidates = search_studio_topics(cookies, q, 20, 0).unwrap_or_default();
+    if candidates.is_empty() {
+        candidates = list_studio_topics(cookies, tid, 1, 50)?;
+    }
+
+    // 1. 精确匹配 topic_name（若存在多个优先选带 mission_id 的活动标签）
+    if let Some(m) = candidates
+        .iter()
+        .filter(|t| t.topic_name.eq_ignore_ascii_case(q))
+        .max_by_key(|t| t.mission_id > 0)
+    {
+        return Ok(m.clone());
+    }
+    // 2. 精确匹配 mission_name
+    if let Some(m) = candidates
+        .iter()
+        .find(|t| !t.mission_name.is_empty() && t.mission_name.eq_ignore_ascii_case(q))
+    {
+        return Ok(m.clone());
+    }
+    // 3. 子串匹配（唯一匹配时直接选用，多个匹配时返回候选项提示避免误绑）
+    let q_lower = q.to_lowercase();
+    let partials: Vec<&StudioTopic> = candidates
+        .iter()
+        .filter(|t| {
+            t.topic_name.to_lowercase().contains(&q_lower)
+                || t.mission_name.to_lowercase().contains(&q_lower)
+        })
+        .collect();
+    if partials.len() == 1 {
+        return Ok(partials[0].clone());
+    }
+    if partials.len() > 1 {
+        let preview = partials
+            .iter()
+            .take(5)
+            .map(|t| {
+                if t.mission_id > 0 {
+                    format!(
+                        "{} (topic_id={}, mission_id={})",
+                        t.topic_name, t.topic_id, t.mission_id
+                    )
+                } else {
+                    format!("{} (topic_id={})", t.topic_name, t.topic_id)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" / ");
+        return Err(BiliLiveError::Input(format!(
+            "活动/话题「{q}」匹配到多个候选项，请使用更精确的名称或直接传 --topic-id / --mission-id：{preview}"
+        )));
+    }
+    Err(BiliLiveError::Input(format!(
+        "未找到名为「{q}」的可用活动/话题，可先运行 `bit video topics -k \"{q}\"` 查询"
+    )))
+}
+
 /// 提交新视频稿件 (`POST /x/vu/web/add/v3`)
 pub fn submit_archive(cookies: &Cookies, params: &ArchiveSubmitParams) -> Result<Value> {
     if params.videos.is_empty() {
@@ -766,6 +999,12 @@ pub fn submit_archive(cookies: &Cookies, params: &ArchiveSubmitParams) -> Result
     });
     if let Some(dt) = params.dtime {
         payload["dtime"] = json!(dt);
+    }
+    if let Some(topic_id) = params.topic_id.filter(|&id| id > 0) {
+        payload["topic_id"] = json!(topic_id);
+    }
+    if let Some(mission_id) = params.mission_id.filter(|&id| id > 0) {
+        payload["mission_id"] = json!(mission_id);
     }
 
     let body = serde_json::to_string(&payload)?;
@@ -867,6 +1106,8 @@ pub struct ArchiveEditPatch {
     pub cover43: Option<String>,
     pub dynamic: Option<String>,
     pub no_reprint: Option<bool>,
+    pub topic_id: Option<i64>,
+    pub mission_id: Option<i64>,
 }
 
 /// 编辑稿件元数据的结果
@@ -885,6 +1126,8 @@ pub struct EditOutcome {
     pub cover43: String,
     pub dynamic: String,
     pub no_reprint: i64,
+    pub topic_id: i64,
+    pub mission_id: i64,
 }
 
 /// 基于原稿件元数据构造编辑载荷；`patch` 中为 `Some` 的字段会覆盖原值，其余保持不变
@@ -935,8 +1178,18 @@ fn build_edit_payload(
         Some(v) => i64::from(copyright == 1 && v),
         None => arc["no_reprint"].as_i64().unwrap_or(1),
     };
+    let recreate = arc["recreate"]
+        .as_i64()
+        .or_else(|| arc["recreate"]["switch"].as_i64())
+        .unwrap_or(-1);
+    let effective_topic_id = patch
+        .topic_id
+        .unwrap_or_else(|| arc["topic_id"].as_i64().unwrap_or(0));
+    let effective_mission_id = patch
+        .mission_id
+        .unwrap_or_else(|| arc["mission_id"].as_i64().unwrap_or(0));
 
-    json!({
+    let mut payload = json!({
         "aid": aid,
         "videos": videos,
         "title": title,
@@ -948,7 +1201,7 @@ fn build_edit_payload(
         "tag": tag,
         "desc_format_id": arc["desc_format_id"].as_i64().unwrap_or(9999),
         "desc": desc,
-        "recreate": arc["recreate"].as_i64().unwrap_or(-1),
+        "recreate": recreate,
         "dynamic": dynamic,
         "interactive": arc["interactive"].as_i64().unwrap_or(0),
         "act_reserve_create": 0,
@@ -960,7 +1213,19 @@ fn build_edit_payload(
         },
         "web_os": 1,
         "csrf": cookies.bili_jct,
-    })
+    });
+    if effective_topic_id > 0 || patch.topic_id.is_some() {
+        payload["topic_id"] = json!(effective_topic_id.max(0));
+    }
+    if effective_mission_id > 0 || patch.mission_id.is_some() {
+        payload["mission_id"] = json!(effective_mission_id.max(0));
+    }
+    if patch.tid.is_none()
+        && let Some(ht2) = arc["human_type2"]["id"].as_i64().filter(|&v| v > 0)
+    {
+        payload["human_type2"] = json!(ht2);
+    }
+    payload
 }
 
 /// 提交稿件编辑 (`POST /x/vu/web/edit`)
@@ -1151,6 +1416,8 @@ pub fn edit_archive_metadata(
         cover43: payload["cover43"].as_str().unwrap_or("").to_string(),
         dynamic: payload["dynamic"].as_str().unwrap_or("").to_string(),
         no_reprint: payload["no_reprint"].as_i64().unwrap_or(0),
+        topic_id: payload["topic_id"].as_i64().unwrap_or(0),
+        mission_id: payload["mission_id"].as_i64().unwrap_or(0),
     })
 }
 
@@ -1249,6 +1516,10 @@ mod tests {
             "desc": "原简介",
             "dynamic": "原动态",
             "no_reprint": 1,
+            "topic_id": 1105274,
+            "mission_id": 4071918,
+            "recreate": { "auth": 1, "editable": 1, "switch": -1 },
+            "human_type2": { "id": 1001, "name": "影视" },
         });
         let videos = vec![json!({"filename": "f1", "title": "P1", "desc": "", "cid": 100})];
 
@@ -1258,7 +1529,7 @@ mod tests {
             no_reprint: Some(false),
             ..ArchiveEditPatch::default()
         };
-        let payload = build_edit_payload(&cookies, &arc, 42, videos, &patch);
+        let payload = build_edit_payload(&cookies, &arc, 42, videos.clone(), &patch);
         assert_eq!(payload["title"], "新标题");
         assert_eq!(
             payload["cover"],
@@ -1273,6 +1544,75 @@ mod tests {
         assert_eq!(payload["desc"], "原简介");
         assert_eq!(payload["dynamic"], "原动态");
         assert_eq!(payload["no_reprint"], 0);
+        assert_eq!(payload["topic_id"], 1105274);
+        assert_eq!(payload["mission_id"], 4071918);
+        assert_eq!(payload["recreate"], -1);
+        assert_eq!(payload["human_type2"], 1001);
         assert_eq!(payload["csrf"], "csrf123");
+
+        // Explicit 0 clears topic_id & mission_id
+        let clear_patch = ArchiveEditPatch {
+            topic_id: Some(0),
+            mission_id: Some(0),
+            ..ArchiveEditPatch::default()
+        };
+        let cleared = build_edit_payload(&cookies, &arc, 42, videos, &clear_patch);
+        assert_eq!(cleared["topic_id"], 0);
+        assert_eq!(cleared["mission_id"], 0);
+    }
+
+    #[test]
+    fn ensure_topic_tag_prepends_dedups_and_respects_ten_tag_limit() {
+        assert_eq!(
+            ensure_topic_tag("广播剧,BBC", "影视神仙剪刀手").unwrap(),
+            "影视神仙剪刀手,广播剧,BBC"
+        );
+        assert_eq!(
+            ensure_topic_tag("影视神仙剪刀手,广播剧", "影视神仙剪刀手").unwrap(),
+            "影视神仙剪刀手,广播剧"
+        );
+        assert!(ensure_topic_tag("1,2,3,4,5,6,7,8,9,10", "影视神仙剪刀手").is_err());
+        assert_eq!(
+            ensure_topic_tag("影视神仙剪刀手,2,3,4,5,6,7,8,9,10", "影视神仙剪刀手").unwrap(),
+            "影视神仙剪刀手,2,3,4,5,6,7,8,9,10"
+        );
+    }
+
+    #[test]
+    fn parse_topic_list_handles_both_type_and_search_shapes() {
+        let type_data = json!({
+            "topics": [
+                {
+                    "topic_id": 1105274,
+                    "topic_name": "影视神仙剪刀手",
+                    "mission_id": 4071918,
+                    "description": "剪辑活动",
+                    "activity_text": "瓜分万元奖金"
+                }
+            ]
+        });
+        let search_data = json!({
+            "result": {
+                "topics": [
+                    {
+                        "id": 1336418,
+                        "name": "影视未来星企划",
+                        "mission_id": 4072350,
+                        "description": "影视新星"
+                    }
+                ]
+            }
+        });
+        let a = parse_topic_list(&type_data);
+        assert_eq!(a.len(), 1);
+        assert_eq!(a[0].topic_id, 1105274);
+        assert_eq!(a[0].mission_id, 4071918);
+        assert!(a[0].is_activity);
+
+        let b = parse_topic_list(&search_data);
+        assert_eq!(b.len(), 1);
+        assert_eq!(b[0].topic_id, 1336418);
+        assert_eq!(b[0].topic_name, "影视未来星企划");
+        assert_eq!(b[0].mission_id, 4072350);
     }
 }

@@ -1958,6 +1958,8 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
             "122",
             "--tag",
             "Rust, 录播",
+            "--topic",
+            "影视神仙剪刀手",
             "--cover",
             cover_png.to_str().unwrap(),
             "-l",
@@ -1970,6 +1972,9 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
         .assert_json_ok();
     assert_eq!(up_json["bvid"], "BV1Up411x7mK");
     assert_eq!(up_json["parts"].as_array().unwrap().len(), 2);
+    assert_eq!(up_json["topic_id"], 1105274);
+    assert_eq!(up_json["mission_id"], 4071918);
+    assert_eq!(up_json["tag"], "影视神仙剪刀手,Rust,录播");
     assert_eq!(
         up_json["cover"],
         "https://archive.biliimg.com/bfs/archive/mock_uploaded_cover.png"
@@ -1983,10 +1988,14 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
             == 6,
         "expected 6 concurrent UPOS PUT chunks (3 per 20-byte file)"
     );
-    assert!(
-        reqs.iter()
-            .any(|r| r.method == "POST" && r.path == "/x/vu/web/add/v3")
-    );
+    let add_req = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.path == "/x/vu/web/add/v3")
+        .expect("expected POST /x/vu/web/add/v3");
+    let add_body: serde_json::Value = serde_json::from_slice(&add_req.body).unwrap();
+    assert_eq!(add_body["topic_id"], 1105274);
+    assert_eq!(add_body["mission_id"], 4071918);
+    assert_eq!(add_body["tag"], "影视神仙剪刀手,Rust,录播");
 
     // 3. Append new part to existing archive (biliup append parity)
     let app_json = env
@@ -2037,6 +2046,8 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
             "231",
             "--tag",
             "广播剧, 熟肉",
+            "--topic",
+            "影视未来星企划",
             "--desc",
             "更新后的简介",
             "--cover",
@@ -2052,7 +2063,9 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
     assert_eq!(edit_json["bvid"], "BV1uJ411r7hL");
     assert_eq!(edit_json["title"], "修改后的标题");
     assert_eq!(edit_json["tid"], 231);
-    assert_eq!(edit_json["tag"], "广播剧,熟肉");
+    assert_eq!(edit_json["tag"], "影视未来星企划,广播剧,熟肉");
+    assert_eq!(edit_json["topic_id"], 1336418);
+    assert_eq!(edit_json["mission_id"], 4072350);
     assert_eq!(edit_json["desc"], "更新后的简介");
     assert_eq!(
         edit_json["cover"],
@@ -2079,13 +2092,28 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
     let edit_body: serde_json::Value = serde_json::from_slice(&edit_post.body).unwrap();
     assert_eq!(edit_body["title"], "修改后的标题");
     assert_eq!(edit_body["tid"], 231);
-    assert_eq!(edit_body["tag"], "广播剧,熟肉");
+    assert_eq!(edit_body["tag"], "影视未来星企划,广播剧,熟肉");
+    assert_eq!(edit_body["topic_id"], 1336418);
+    assert_eq!(edit_body["mission_id"], 4072350);
     assert_eq!(edit_body["desc"], "更新后的简介");
     assert_eq!(
         edit_body["cover43"],
         "https://archive.biliimg.com/bfs/archive/mock_uploaded_cover.png"
     );
     assert_eq!(edit_body["videos"].as_array().unwrap().len(), 2);
+
+    // 3c. Query & search studio activity topics
+    let topics_json = env
+        .run_bt(&["--json", "video", "topics", "--tid", "231", "--activity-only"])
+        .assert_json_ok();
+    assert_eq!(topics_json["count"], 2);
+    assert_eq!(topics_json["topics"][0]["topic_name"], "影视神仙剪刀手");
+
+    let topics_search = env
+        .run_bt(&["--json", "video", "topics", "-k", "未来星"])
+        .assert_json_ok();
+    assert_eq!(topics_search["count"], 1);
+    assert_eq!(topics_search["topics"][0]["mission_id"], 4072350);
 
     // 4. Creative Center Studio list & show (biliup list / show parity)
     env.run_bt(&["video", "studio", "ls", "--status", "pubing"])
