@@ -2004,6 +2004,89 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
     assert_eq!(app_json["appended_count"], 1);
     assert_eq!(app_json["total_parts"], 3);
 
+    // 3b. Edit existing archive metadata (fail-fast + confirmation + full patch)
+    server.reset_requests();
+    env.run_bt(&["--json", "video", "edit", "BV1uJ411r7hL"])
+        .assert_json_err(Some("Input"));
+    assert!(server.requests().is_empty());
+
+    // Requires -y in --json mode
+    env.run_bt(&[
+        "--json",
+        "video",
+        "edit",
+        "BV1uJ411r7hL",
+        "-t",
+        "修改后的标题",
+    ])
+    .assert_json_err(Some("Input"));
+
+    server.reset_requests();
+    let cover43_png = env.work_dir().join("edit_cover43.png");
+    std::fs::write(&cover43_png, b"\x89PNG\r\n\x1a\nmockpng43edit").unwrap();
+    let edit_json = env
+        .run_bt(&[
+            "--json",
+            "-y",
+            "video",
+            "edit",
+            "BV1uJ411r7hL",
+            "-t",
+            "修改后的标题",
+            "--tid",
+            "231",
+            "--tag",
+            "广播剧, 熟肉",
+            "--desc",
+            "更新后的简介",
+            "--cover",
+            cover_png.to_str().unwrap(),
+            "--cover43",
+            cover43_png.to_str().unwrap(),
+            "--dynamic",
+            "新动态",
+            "--no-reprint",
+            "false",
+        ])
+        .assert_json_ok();
+    assert_eq!(edit_json["bvid"], "BV1uJ411r7hL");
+    assert_eq!(edit_json["title"], "修改后的标题");
+    assert_eq!(edit_json["tid"], 231);
+    assert_eq!(edit_json["tag"], "广播剧,熟肉");
+    assert_eq!(edit_json["desc"], "更新后的简介");
+    assert_eq!(
+        edit_json["cover"],
+        "https://archive.biliimg.com/bfs/archive/mock_uploaded_cover.png"
+    );
+    assert_eq!(
+        edit_json["cover43"],
+        "https://archive.biliimg.com/bfs/archive/mock_uploaded_cover.png"
+    );
+    assert_eq!(edit_json["no_reprint"], 0);
+
+    let edit_reqs = server.requests();
+    assert_eq!(
+        edit_reqs
+            .iter()
+            .filter(|r| r.method == "POST" && r.path == "/x/vu/web/cover/up")
+            .count(),
+        2
+    );
+    let edit_post = edit_reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.path == "/x/vu/web/edit")
+        .expect("expected POST /x/vu/web/edit");
+    let edit_body: serde_json::Value = serde_json::from_slice(&edit_post.body).unwrap();
+    assert_eq!(edit_body["title"], "修改后的标题");
+    assert_eq!(edit_body["tid"], 231);
+    assert_eq!(edit_body["tag"], "广播剧,熟肉");
+    assert_eq!(edit_body["desc"], "更新后的简介");
+    assert_eq!(
+        edit_body["cover43"],
+        "https://archive.biliimg.com/bfs/archive/mock_uploaded_cover.png"
+    );
+    assert_eq!(edit_body["videos"].as_array().unwrap().len(), 2);
+
     // 4. Creative Center Studio list & show (biliup list / show parity)
     env.run_bt(&["video", "studio", "ls", "--status", "pubing"])
         .assert_exit(0)

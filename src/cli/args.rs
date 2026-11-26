@@ -968,9 +968,59 @@ pub enum VideoCommands {
         limit: u32,
     },
 
+    /// 编辑已有稿件的元数据（标题、分区、标签、简介、16:9/4:3封面、版权、动态文案、禁转声明等；未指定字段保持原值）
+    Edit(Box<VideoEditArgs>),
+
     /// 创作中心后台稿件列表与转码审核状态查询（对标 biliup list / show）
     #[command(visible_alias = "archives", subcommand)]
     Studio(VideoStudioCommands),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct VideoEditArgs {
+    /// 目标已投递稿件的 BV号、AV号或视频 URL
+    #[arg(value_name = "VIDEO")]
+    pub video: String,
+
+    /// 修改稿件标题（最长 80 字）
+    #[arg(short = 't', long)]
+    pub title: Option<String>,
+
+    /// 修改投稿分区 ID（如 231, 171, 122）
+    #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
+    pub tid: Option<u32>,
+
+    /// 修改视频标签（多个用英文或中文逗号分隔，最多 10 个）
+    #[arg(long)]
+    pub tag: Option<String>,
+
+    /// 修改视频简介
+    #[arg(long)]
+    pub desc: Option<String>,
+
+    /// 修改版权类型：1=自制，2=转载（改转载时若原稿无来源须同时指定 --source）
+    #[arg(long, value_parser = clap::value_parser!(u8).range(1..=2))]
+    pub copyright: Option<u8>,
+
+    /// 修改转载来源网址
+    #[arg(long)]
+    pub source: Option<String>,
+
+    /// 修改 16:9 主封面（支持本地图片路径 jpg/png/webp 自动上传，或远程 https URL）
+    #[arg(long, value_name = "IMAGE")]
+    pub cover: Option<String>,
+
+    /// 修改 4:3 推荐封面（支持本地图片路径 jpg/png/webp 自动上传，或远程 https URL）
+    #[arg(long, value_name = "IMAGE")]
+    pub cover43: Option<String>,
+
+    /// 修改粉丝动态文案
+    #[arg(long)]
+    pub dynamic: Option<String>,
+
+    /// 修改自制稿件“未经作者授权禁止转载”声明（true/false）
+    #[arg(long, value_name = "BOOL")]
+    pub no_reprint: Option<bool>,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -2143,6 +2193,43 @@ mod tests {
             Cli::try_parse_from(["bit", "video", "replace", "BV1xx", "v2.mp4", "-p", "0"]).is_err()
         );
         assert!(Cli::try_parse_from(["bit", "video", "replace", "BV1xx"]).is_err());
+        let ed = Cli::try_parse_from([
+            "bit",
+            "video",
+            "edit",
+            "BV1xx",
+            "-t",
+            "改后标题",
+            "--tid",
+            "231",
+            "--tag",
+            "广播剧,双语",
+            "--desc",
+            "新简介",
+            "--cover",
+            "c16x9.png",
+            "--cover43",
+            "c4x3.png",
+            "--no-reprint",
+            "true",
+        ])
+        .unwrap();
+        assert!(matches!(
+            ed.command,
+            Some(Commands::Video(VideoCommands::Edit(ref args)))
+                if args.video == "BV1xx"
+                    && args.title.as_deref() == Some("改后标题")
+                    && args.tid == Some(231)
+                    && args.tag.as_deref() == Some("广播剧,双语")
+                    && args.desc.as_deref() == Some("新简介")
+                    && args.cover.as_deref() == Some("c16x9.png")
+                    && args.cover43.as_deref() == Some("c4x3.png")
+                    && args.no_reprint == Some(true)
+        ));
+        assert!(Cli::try_parse_from(["bit", "video", "edit", "BV1xx", "--tid", "0"]).is_err());
+        assert!(
+            Cli::try_parse_from(["bit", "video", "edit", "BV1xx", "--copyright", "3"]).is_err()
+        );
         assert!(
             Cli::try_parse_from(["bit", "video", "studio", "ls", "--status", "pubing"]).is_ok()
         );

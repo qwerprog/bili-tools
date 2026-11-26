@@ -2141,6 +2141,172 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             }
         }
 
+        VideoCommands::Edit(args) => {
+            let crate::cli::args::VideoEditArgs {
+                video,
+                title,
+                tid,
+                tag,
+                desc,
+                copyright,
+                source,
+                cover,
+                cover43,
+                dynamic,
+                no_reprint,
+            } = *args;
+            // 1. 前置校验：至少指定一个修改项，且本地字段格式合法（0 网络请求快速失败）
+            if title.is_none()
+                && tid.is_none()
+                && tag.is_none()
+                && desc.is_none()
+                && copyright.is_none()
+                && source.is_none()
+                && cover.is_none()
+                && cover43.is_none()
+                && dynamic.is_none()
+                && no_reprint.is_none()
+            {
+                return Err(BiliLiveError::Input(
+                    "至少需要指定一个要修改的字段（如 --title / --tid / --tag / --desc / --cover / --cover43 等）"
+                        .to_string(),
+                ));
+            }
+
+            let validated_title = title
+                .as_deref()
+                .map(crate::api::upload::validate_archive_title)
+                .transpose()?;
+            let validated_tag = tag
+                .as_deref()
+                .map(crate::api::upload::normalize_tags)
+                .transpose()?;
+
+            let mut changed_labels: Vec<&str> = Vec::new();
+            if validated_title.is_some() {
+                changed_labels.push("标题");
+            }
+            if tid.is_some() {
+                changed_labels.push("分区");
+            }
+            if validated_tag.is_some() {
+                changed_labels.push("标签");
+            }
+            if desc.is_some() {
+                changed_labels.push("简介");
+            }
+            if copyright.is_some() {
+                changed_labels.push("版权类型");
+            }
+            if source.is_some() {
+                changed_labels.push("转载来源");
+            }
+            if cover.is_some() {
+                changed_labels.push("16:9封面");
+            }
+            if cover43.is_some() {
+                changed_labels.push("4:3封面");
+            }
+            if dynamic.is_some() {
+                changed_labels.push("动态文案");
+            }
+            if no_reprint.is_some() {
+                changed_labels.push("禁转声明");
+            }
+
+            let cookies = crate::auth::ensure_csrf()?;
+            let existing = crate::api::upload::get_studio_archive_view(&cookies, &video)?;
+            let arc = &existing["archive"];
+            let existing_title = arc["title"].as_str().unwrap_or(&video).to_string();
+            let bvid = arc["bvid"].as_str().unwrap_or(&video).to_string();
+
+            let effective_copyright = copyright
+                .map(u64::from)
+                .unwrap_or_else(|| arc["copyright"].as_u64().unwrap_or(1));
+            let effective_source = source
+                .as_deref()
+                .unwrap_or_else(|| arc["source"].as_str().unwrap_or(""));
+            if effective_copyright == 2 && effective_source.trim().is_empty() {
+                return Err(BiliLiveError::Input(
+                    "转载稿件 (--copyright 2) 必须通过 --source 指定转载来源网址".to_string(),
+                ));
+            }
+
+            let prompt = format!(
+                "将修改稿件《{existing_title}》({bvid}) 的 {}，确认提交？",
+                changed_labels.join("、")
+            );
+            if !crate::cli::output::confirm_action(&prompt)? {
+                user_warning!("已取消编辑");
+                return Ok(());
+            }
+
+            let uploaded_cover = match cover {
+                Some(ref c) => {
+                    if c.trim().is_empty() {
+                        Some(String::new())
+                    } else {
+                        user_info!("正在处理 16:9 主封面...");
+                        Some(crate::api::upload::upload_cover_image(&cookies, c)?)
+                    }
+                }
+                None => None,
+            };
+            let uploaded_cover43 = match cover43 {
+                Some(ref c) => {
+                    if c.trim().is_empty() {
+                        Some(String::new())
+                    } else {
+                        user_info!("正在处理 4:3 推荐封面...");
+                        Some(crate::api::upload::upload_cover_image(&cookies, c)?)
+                    }
+                }
+                None => None,
+            };
+
+            let patch = crate::api::upload::ArchiveEditPatch {
+                title: validated_title,
+                tid,
+                tag: validated_tag,
+                desc,
+                copyright,
+                source: source.map(|s| s.trim().to_string()),
+                cover: uploaded_cover,
+                cover43: uploaded_cover43,
+                dynamic,
+                no_reprint,
+            };
+            let outcome =
+                crate::api::upload::edit_archive_metadata(&cookies, &existing, &patch)?;
+
+            if is_json() {
+                print_json(&json!({
+                    "success": true,
+                    "bvid": outcome.bvid,
+                    "aid": outcome.aid,
+                    "updated_fields": changed_labels,
+                    "title": outcome.title,
+                    "tid": outcome.tid,
+                    "tag": outcome.tag,
+                    "desc": outcome.desc,
+                    "copyright": outcome.copyright,
+                    "source": outcome.source,
+                    "cover": outcome.cover,
+                    "cover43": outcome.cover43,
+                    "dynamic": outcome.dynamic,
+                    "no_reprint": outcome.no_reprint,
+                    "data": outcome.data,
+                }))?;
+            } else {
+                user_success!(
+                    "已更新稿件《{}》({})（修改项：{}）",
+                    outcome.title,
+                    outcome.bvid,
+                    changed_labels.join("、")
+                );
+            }
+        }
+
         VideoCommands::Studio(sub) => match sub {
             VideoStudioCommands::List {
                 status,

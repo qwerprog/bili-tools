@@ -854,32 +854,106 @@ fn archive_aid(arc: &Value) -> Result<i64> {
         .ok_or_else(|| BiliLiveError::Parse("原稿件详情缺少有效 aid".to_string()))
 }
 
-/// 基于原稿件元数据构造编辑载荷；`title_override` 为 `Some` 时同时修改稿件标题
+/// 稿件元数据增量编辑补丁（`None` 表示保留原稿件字段）
+#[derive(Debug, Clone, Default)]
+pub struct ArchiveEditPatch {
+    pub title: Option<String>,
+    pub tid: Option<u32>,
+    pub tag: Option<String>,
+    pub desc: Option<String>,
+    pub copyright: Option<u8>,
+    pub source: Option<String>,
+    pub cover: Option<String>,
+    pub cover43: Option<String>,
+    pub dynamic: Option<String>,
+    pub no_reprint: Option<bool>,
+}
+
+/// 编辑稿件元数据的结果
+#[derive(Debug, Clone, Serialize)]
+pub struct EditOutcome {
+    pub data: Value,
+    pub aid: i64,
+    pub bvid: String,
+    pub title: String,
+    pub tid: u64,
+    pub tag: String,
+    pub desc: String,
+    pub copyright: u64,
+    pub source: String,
+    pub cover: String,
+    pub cover43: String,
+    pub dynamic: String,
+    pub no_reprint: i64,
+}
+
+/// 基于原稿件元数据构造编辑载荷；`patch` 中为 `Some` 的字段会覆盖原值，其余保持不变
 fn build_edit_payload(
     cookies: &Cookies,
     arc: &Value,
     aid: i64,
     videos: Vec<Value>,
-    title_override: Option<&str>,
+    patch: &ArchiveEditPatch,
 ) -> Value {
+    let title = patch
+        .title
+        .as_deref()
+        .unwrap_or_else(|| arc["title"].as_str().unwrap_or(""));
+    let cover = patch
+        .cover
+        .as_deref()
+        .unwrap_or_else(|| arc["cover"].as_str().unwrap_or(""));
+    let cover43 = patch
+        .cover43
+        .as_deref()
+        .unwrap_or_else(|| arc["cover43"].as_str().unwrap_or(""));
+    let copyright = patch
+        .copyright
+        .map(u64::from)
+        .unwrap_or_else(|| arc["copyright"].as_u64().unwrap_or(1));
+    let source = patch
+        .source
+        .as_deref()
+        .unwrap_or_else(|| arc["source"].as_str().unwrap_or(""));
+    let tid = patch
+        .tid
+        .map(u64::from)
+        .unwrap_or_else(|| arc["tid"].as_u64().unwrap_or(171));
+    let tag = patch
+        .tag
+        .as_deref()
+        .unwrap_or_else(|| arc["tag"].as_str().unwrap_or(""));
+    let desc = patch
+        .desc
+        .as_deref()
+        .unwrap_or_else(|| arc["desc"].as_str().unwrap_or(""));
+    let dynamic = patch
+        .dynamic
+        .as_deref()
+        .unwrap_or_else(|| arc["dynamic"].as_str().unwrap_or(""));
+    let no_reprint = match patch.no_reprint {
+        Some(v) => i64::from(copyright == 1 && v),
+        None => arc["no_reprint"].as_i64().unwrap_or(1),
+    };
+
     json!({
         "aid": aid,
         "videos": videos,
-        "title": title_override.unwrap_or_else(|| arc["title"].as_str().unwrap_or("")),
-        "cover": arc["cover"].as_str().unwrap_or(""),
-        "cover43": arc["cover43"].as_str().unwrap_or(""),
-        "copyright": arc["copyright"].as_u64().unwrap_or(1),
-        "source": arc["source"].as_str().unwrap_or(""),
-        "tid": arc["tid"].as_u64().unwrap_or(171),
-        "tag": arc["tag"].as_str().unwrap_or(""),
+        "title": title,
+        "cover": cover,
+        "cover43": cover43,
+        "copyright": copyright,
+        "source": source,
+        "tid": tid,
+        "tag": tag,
         "desc_format_id": arc["desc_format_id"].as_i64().unwrap_or(9999),
-        "desc": arc["desc"].as_str().unwrap_or(""),
+        "desc": desc,
         "recreate": arc["recreate"].as_i64().unwrap_or(-1),
-        "dynamic": arc["dynamic"].as_str().unwrap_or(""),
+        "dynamic": dynamic,
         "interactive": arc["interactive"].as_i64().unwrap_or(0),
         "act_reserve_create": 0,
         "no_disturbance": 0,
-        "no_reprint": arc["no_reprint"].as_i64().unwrap_or(1),
+        "no_reprint": no_reprint,
         "subtitle": {
             "open": 0,
             "lan": ""
@@ -944,7 +1018,13 @@ pub fn append_archive_parts(
     }
     let total_parts = merged_videos.len();
 
-    let payload = build_edit_payload(cookies, arc, aid, merged_videos, None);
+    let payload = build_edit_payload(
+        cookies,
+        arc,
+        aid,
+        merged_videos,
+        &ArchiveEditPatch::default(),
+    );
     let data = submit_archive_edit(cookies, &payload, "追加稿件分P失败")?;
     Ok((data, total_parts))
 }
@@ -1020,7 +1100,11 @@ pub fn replace_archive_part(
         Some(t) => validate_archive_title(t)?,
         None => arc["title"].as_str().unwrap_or("").to_string(),
     };
-    let payload = build_edit_payload(cookies, arc, aid, videos, Some(&title));
+    let patch = ArchiveEditPatch {
+        title: Some(title.clone()),
+        ..ArchiveEditPatch::default()
+    };
+    let payload = build_edit_payload(cookies, arc, aid, videos, &patch);
     let data = submit_archive_edit(cookies, &payload, "替换稿件视频失败")?;
     Ok(ReplaceOutcome {
         data,
@@ -1029,6 +1113,44 @@ pub fn replace_archive_part(
         old_filename,
         part_title,
         title,
+    })
+}
+
+/// 编辑已有稿件的元数据 (`POST /x/vu/web/edit`)，保留原有视频分P列表与未指定字段
+pub fn edit_archive_metadata(
+    cookies: &Cookies,
+    view: &Value,
+    patch: &ArchiveEditPatch,
+) -> Result<EditOutcome> {
+    let arc = &view["archive"];
+    let aid = archive_aid(arc)?;
+    let videos = existing_video_entries(view);
+    if videos.is_empty() {
+        return Err(BiliLiveError::Parse("原稿件详情缺少有效视频分P列表".to_string()));
+    }
+
+    let payload = build_edit_payload(cookies, arc, aid, videos, patch);
+    let data = submit_archive_edit(cookies, &payload, "编辑稿件元数据失败")?;
+    let bvid = data["bvid"]
+        .as_str()
+        .or_else(|| arc["bvid"].as_str())
+        .unwrap_or("")
+        .to_string();
+
+    Ok(EditOutcome {
+        data,
+        aid,
+        bvid,
+        title: payload["title"].as_str().unwrap_or("").to_string(),
+        tid: payload["tid"].as_u64().unwrap_or(0),
+        tag: payload["tag"].as_str().unwrap_or("").to_string(),
+        desc: payload["desc"].as_str().unwrap_or("").to_string(),
+        copyright: payload["copyright"].as_u64().unwrap_or(1),
+        source: payload["source"].as_str().unwrap_or("").to_string(),
+        cover: payload["cover"].as_str().unwrap_or("").to_string(),
+        cover43: payload["cover43"].as_str().unwrap_or("").to_string(),
+        dynamic: payload["dynamic"].as_str().unwrap_or("").to_string(),
+        no_reprint: payload["no_reprint"].as_i64().unwrap_or(0),
     })
 }
 
@@ -1105,5 +1227,52 @@ mod tests {
         );
         assert!(normalize_tags(" , ， ").is_err());
         assert!(normalize_tags("1,2,3,4,5,6,7,8,9,10,11").is_err());
+    }
+
+    #[test]
+    fn build_edit_payload_preserves_existing_fields_and_applies_patch() {
+        let cookies = Cookies {
+            sessdata: "s".to_string(),
+            bili_jct: "csrf123".to_string(),
+            dede_user_id: "1".to_string(),
+            ..Cookies::default()
+        };
+        let arc = json!({
+            "aid": 42,
+            "title": "原标题",
+            "cover": "https://archive.biliimg.com/bfs/archive/orig16x9.jpg",
+            "cover43": "https://archive.biliimg.com/bfs/archive/orig4x3.jpg",
+            "copyright": 1,
+            "source": "",
+            "tid": 231,
+            "tag": "广播剧,BBC",
+            "desc": "原简介",
+            "dynamic": "原动态",
+            "no_reprint": 1,
+        });
+        let videos = vec![json!({"filename": "f1", "title": "P1", "desc": "", "cid": 100})];
+
+        let patch = ArchiveEditPatch {
+            title: Some("新标题".to_string()),
+            cover43: Some("https://archive.biliimg.com/bfs/archive/new4x3.png".to_string()),
+            no_reprint: Some(false),
+            ..ArchiveEditPatch::default()
+        };
+        let payload = build_edit_payload(&cookies, &arc, 42, videos, &patch);
+        assert_eq!(payload["title"], "新标题");
+        assert_eq!(
+            payload["cover"],
+            "https://archive.biliimg.com/bfs/archive/orig16x9.jpg"
+        );
+        assert_eq!(
+            payload["cover43"],
+            "https://archive.biliimg.com/bfs/archive/new4x3.png"
+        );
+        assert_eq!(payload["tid"], 231);
+        assert_eq!(payload["tag"], "广播剧,BBC");
+        assert_eq!(payload["desc"], "原简介");
+        assert_eq!(payload["dynamic"], "原动态");
+        assert_eq!(payload["no_reprint"], 0);
+        assert_eq!(payload["csrf"], "csrf123");
     }
 }
