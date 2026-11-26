@@ -2376,3 +2376,40 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
             .contains("<chatserver>chat.bilibili.com</chatserver>")
     );
 }
+
+#[test]
+fn t5_c3_09_subtitle_upload_no_verify_skips_list_polling() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+
+    let out = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt.to_str().unwrap(),
+            "--lang",
+            "zh",
+            "--no-verify",
+        ])
+        .assert_json_ok();
+
+    assert_eq!(out["verified"], false);
+    assert!(out["verified_id"].is_null());
+    assert!(out["verified_status"].is_null());
+
+    let reqs = server.requests();
+    assert!(
+        reqs.iter()
+            .any(|r| r.method == "POST" && r.path == "/x/v2/dm/subtitle/draft/save"),
+        "submit should still be sent"
+    );
+    assert!(
+        !reqs
+            .iter()
+            .any(|r| r.path == "/x/v2/dm/subtitle/search/author/list"),
+        "--no-verify must not poll author/list"
+    );
+}

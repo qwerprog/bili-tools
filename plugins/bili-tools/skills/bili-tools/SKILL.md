@@ -95,6 +95,8 @@ bit --json video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh -p 1
 # Save as draft, or verify the conversion offline (zero network requests):
 bit --json video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh --draft
 bit --json video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh --dry-run
+# Large batches: skip the post-submit author/list poll, then verify with subtitle-list
+bit --json video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh -p 1 --no-verify
 # List subtitle tracks for a part, or for the whole account:
 bit --json video subtitle-list BV1hp4y1k7SV -p 1 --status all
 bit --json video subtitle-list --status deleted

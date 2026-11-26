@@ -58,6 +58,7 @@ bit video subtitle-delete <VIDEO> --id <SUBTITLE_ID> [--id ...] [-p N] [-y]
 - **Listing**: always uses `author/list`. With `VIDEO` it resolves the cid and filters by `oid`; `-p/--part` selects the part while `--page` paginates the account list.
 - **Review delay**: after submit, anonymous playback waits for approval (a few minutes). Not visible anonymously ≠ failure.
 - **Verification**: after `draft/save`, the command polls `author/list` for a new `(cid, lang)` entry (server index lag measured ~40 s; default budget 90 s). If no new version appears, it fails instead of reporting a false success.
+- **`--no-verify`**: skip that poll (each poll scans the whole account list, so it is slow for large batches). JSON reports `verified=false`; verify afterwards with `subtitle-list`.
 - **Deletion**: soft delete; `status` first becomes `4` (visible in the list for a short window) and the server later drops the entry. Non-interactive or `--json` invocations require `-y`.
 
 ## JSON Error Envelope Kinds

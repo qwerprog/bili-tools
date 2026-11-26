@@ -726,6 +726,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             page,
             draft,
             sign,
+            no_verify,
             dry_run,
         } => {
             // 语言码优先归一化：非法值必须在任何网络请求之前失败
@@ -825,13 +826,18 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             let page_num = page.or(target_page).unwrap_or(1);
             let resolved = crate::api::video::extract_page_info(&info, page_num)?;
 
-            // draft/save 的响应体不可信：先记录已有版本 ID，提交后回查 author/list 确认新版本真的落库
-            let (before, _) = crate::api::subtitle::list_all_subtitles(&cookies, 50)?;
-            let before_ids: HashSet<String> = before
-                .iter()
-                .filter_map(|item| item["id_str"].as_str())
-                .map(str::to_string)
-                .collect();
+            // draft/save 的响应体不可信：先记录已有版本 ID，提交后回查 author/list 确认新版本真的落库。
+            // `--no-verify` 供大批量上传使用：跳过回查（每条会扫描全账号字幕列表），由调用方统一复核。
+            let before_ids: HashSet<String> = if no_verify {
+                HashSet::new()
+            } else {
+                let (before, _) = crate::api::subtitle::list_all_subtitles(&cookies, 50)?;
+                before
+                    .iter()
+                    .filter_map(|item| item["id_str"].as_str())
+                    .map(str::to_string)
+                    .collect()
+            };
 
             let response = crate::api::subtitle::submit_subtitle(
                 &cookies,
@@ -843,50 +849,68 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 sign,
             )?;
 
-            // author/list 是搜索索引，新建字幕通常要几十秒才可见（实测约 40 秒），
-            // 所以这里做有上限的轮询，既不能立即误报失败，也不能无限等待。
-            let verify_timeout = subtitle_verify_timeout_secs();
-            let poll_interval = std::time::Duration::from_secs(3);
-            let max_attempts = verify_timeout / poll_interval.as_secs() + 1;
-            if !is_json() {
-                user_info!(
-                    "正在回查字幕列表确认新版本已落库（服务端索引通常有几十秒延迟，最多等待 {} 秒）",
-                    verify_timeout
-                );
-            }
-            let mut verified: Option<Value> = None;
-            for attempt in 0..max_attempts {
-                if attempt > 0 {
-                    std::thread::sleep(poll_interval);
+            let verified: Option<Value> = if no_verify {
+                if !is_json() {
+                    user_warning!(
+                        "已按 --no-verify 跳过字幕列表回查；请稍后用 `bit video subtitle-list` 复核是否落库"
+                    );
                 }
-                let (after, _) = crate::api::subtitle::list_all_subtitles(&cookies, 50)?;
-                verified = after
-                    .iter()
-                    .find(|item| {
-                        item["oid"].as_i64() == Some(resolved.cid)
-                            && item["lan"].as_str() == Some(normalized_lang.as_str())
-                            && item["id_str"]
-                                .as_str()
-                                .is_some_and(|id| !before_ids.contains(id))
-                    })
-                    .cloned();
-                if verified.is_some() {
-                    break;
+                None
+            } else {
+                // author/list 是搜索索引，新建字幕通常要几十秒才可见（实测约 40 秒），
+                // 所以这里做有上限的轮询，既不能立即误报失败，也不能无限等待。
+                let verify_timeout = subtitle_verify_timeout_secs();
+                let poll_interval = std::time::Duration::from_secs(3);
+                let max_attempts = verify_timeout / poll_interval.as_secs() + 1;
+                if !is_json() {
+                    user_info!(
+                        "正在回查字幕列表确认新版本已落库（服务端索引通常有几十秒延迟，最多等待 {} 秒）",
+                        verify_timeout
+                    );
                 }
-            }
-            let Some(verified) = verified else {
-                return Err(BiliLiveError::Api(format!(
-                    "提交接口返回成功，但 {timeout} 秒内未在字幕列表中确认到 {bvid} P{page}（cid={cid}, lan={lan}）的新条目；\
-                     为避免误报成功，本次结果按失败处理，请用 `bit video subtitle-list {bvid} -p {page}` 复核",
-                    timeout = verify_timeout,
-                    bvid = resolved.bvid,
-                    page = resolved.page,
-                    cid = resolved.cid,
-                    lan = normalized_lang,
-                )));
+                let mut verified: Option<Value> = None;
+                for attempt in 0..max_attempts {
+                    if attempt > 0 {
+                        std::thread::sleep(poll_interval);
+                    }
+                    let (after, _) = crate::api::subtitle::list_all_subtitles(&cookies, 50)?;
+                    verified = after
+                        .iter()
+                        .find(|item| {
+                            item["oid"].as_i64() == Some(resolved.cid)
+                                && item["lan"].as_str() == Some(normalized_lang.as_str())
+                                && item["id_str"]
+                                    .as_str()
+                                    .is_some_and(|id| !before_ids.contains(id))
+                        })
+                        .cloned();
+                    if verified.is_some() {
+                        break;
+                    }
+                }
+                let Some(verified) = verified else {
+                    return Err(BiliLiveError::Api(format!(
+                        "提交接口返回成功，但 {timeout} 秒内未在字幕列表中确认到 {bvid} P{page}（cid={cid}, lan={lan}）的新条目；\
+                         为避免误报成功，本次结果按失败处理，请用 `bit video subtitle-list {bvid} -p {page}` 复核",
+                        timeout = verify_timeout,
+                        bvid = resolved.bvid,
+                        page = resolved.page,
+                        cid = resolved.cid,
+                        lan = normalized_lang,
+                    )));
+                };
+                Some(verified)
             };
-            let verified_id = verified["id_str"].as_str().unwrap_or("").to_string();
-            let verified_status = verified["status"].as_i64().unwrap_or(0);
+            let verified_id = verified
+                .as_ref()
+                .and_then(|v| v["id_str"].as_str())
+                .unwrap_or("")
+                .to_string();
+            let verified_status = verified
+                .as_ref()
+                .and_then(|v| v["status"].as_i64())
+                .unwrap_or(0);
+            let verified_ok = verified.is_some();
 
             if is_json() {
                 print_json(&json!({
@@ -907,10 +931,14 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     "skipped": stats.skipped,
                     "first_from": first_from,
                     "last_to": last_to,
-                    "verified": true,
-                    "verified_id": verified_id,
-                    "verified_status": verified_status,
-                    "verified_status_text": crate::api::subtitle::status_text(verified_status),
+                    "verified": verified_ok,
+                    "verified_id": if verified_ok { Value::String(verified_id.clone()) } else { Value::Null },
+                    "verified_status": if verified_ok { json!(verified_status) } else { Value::Null },
+                    "verified_status_text": if verified_ok {
+                        Value::String(crate::api::subtitle::status_text(verified_status).to_string())
+                    } else {
+                        Value::Null
+                    },
                     "response": response,
                 }))?;
             } else {
@@ -941,13 +969,21 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     first_from,
                     last_to
                 );
-                user_info!(
-                    "语言: 输入 {} → 归一化为 {}；新版本 ID {}（当前状态：{}）",
-                    lang_input,
-                    normalized_lang,
-                    verified_id,
-                    crate::api::subtitle::status_text(verified_status)
-                );
+                if verified_ok {
+                    user_info!(
+                        "语言: 输入 {} → 归一化为 {}；新版本 ID {}（当前状态：{}）",
+                        lang_input,
+                        normalized_lang,
+                        verified_id,
+                        crate::api::subtitle::status_text(verified_status)
+                    );
+                } else {
+                    user_info!(
+                        "语言: 输入 {} → 归一化为 {}；已跳过回查，落库状态未知",
+                        lang_input,
+                        normalized_lang
+                    );
+                }
                 user_info!("这是新增一个版本，同一分P同语言的旧版本仍保留在字幕列表中");
                 user_info!("审核通常需要几分钟：登录态可立即看到；匿名播放器要等审核通过后才出现，暂时看不到不是失败");
             }

@@ -131,7 +131,7 @@ bit video replace <BVID> new.mp4 -t "新标题" # 替换稿件视频文件（保
 bit video studio ls                         # 查看创作中心个人稿件列表
 
 # 字幕轨管理（SRT 自动转 BCC；同一个分P+语言上传多次会生成多个版本）
-bit video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh  # 提交字幕（--draft 存草稿，--dry-run 只离线转换）
+bit video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh  # 提交字幕（--draft 存草稿，--dry-run 只离线转换，--no-verify 跳过回查）
 bit video subtitle-list BV1hp4y1k7SV -p 1                    # 查看分P字幕轨（省略 VIDEO 查看账号全部字幕）
 bit video subtitle-delete BV1hp4y1k7SV --id <SUBTITLE_ID> -y # 删除字幕轨（软删除，条目 status 变为 4）
 

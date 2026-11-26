@@ -739,6 +739,10 @@ pub enum VideoCommands {
         #[arg(long)]
         sign: bool,
 
+        /// 跳过提交后的字幕列表回查（大批量上传时使用，需自行用 subtitle-list 复核）
+        #[arg(long)]
+        no_verify: bool,
+
         /// 只做 SRT→BCC 解析与转换，不发起任何网络请求
         #[arg(long)]
         dry_run: bool,
