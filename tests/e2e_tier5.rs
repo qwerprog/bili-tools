@@ -2413,3 +2413,164 @@ fn t5_c3_09_subtitle_upload_no_verify_skips_list_polling() {
         "--no-verify must not poll author/list"
     );
 }
+
+#[test]
+fn t5_c3_10_subtitle_list_account_scope_keeps_matches_from_later_pages() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+
+    // 3 条记录：一条已发布、一条已删除、再一条已发布（mtime 倒序，删除那条在中间页）
+    let published = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt.to_str().unwrap(),
+            "--lang",
+            "en",
+            "--no-verify",
+        ])
+        .assert_json_ok();
+    assert_eq!(published["verified"], false);
+
+    let to_delete = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt.to_str().unwrap(),
+            "--lang",
+            "zh",
+            "--no-verify",
+        ])
+        .assert_json_ok();
+    assert_eq!(to_delete["verified"], false);
+
+    let listed = env
+        .run_bt(&["--json", "video", "subtitle-list"])
+        .assert_json_ok();
+    let ids: Vec<String> = listed["subtitles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["id_str"].as_str().unwrap().to_string())
+        .collect();
+
+    let deleted_id = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-delete",
+            "BV1uJ411r7hL",
+            "--id",
+            &ids[0],
+            "-y",
+        ])
+        .assert_json_ok()["deleted"][0]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    env.run_bt(&[
+        "--json",
+        "video",
+        "subtitle-upload",
+        "BV1uJ411r7hL",
+        srt.to_str().unwrap(),
+        "--lang",
+        "ja",
+        "--no-verify",
+    ])
+    .assert_json_ok();
+
+    // 每页只取 1 条：首页（最新）不是已删除记录，过滤必须翻到后续分页才能找到它
+    let deleted = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-list",
+            "--status",
+            "deleted",
+            "--page-size",
+            "1",
+        ])
+        .assert_json_ok();
+    assert_eq!(deleted["scope"], "account");
+    assert_eq!(deleted["matched_total"], 1);
+    assert_eq!(deleted["subtitles"].as_array().unwrap().len(), 1);
+    assert_eq!(deleted["subtitles"][0]["id_str"], deleted_id.as_str());
+
+    // 结果集按过滤后分页：--list-page 2 拿到第 2 页，且每页 1 条
+    let published_page = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-list",
+            "--status",
+            "published",
+            "--page-size",
+            "1",
+            "--list-page",
+            "2",
+        ])
+        .assert_json_ok();
+    assert_eq!(published_page["matched_total"], 2);
+    assert_eq!(published_page["subtitles"].as_array().unwrap().len(), 1);
+
+    let published_all = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-list",
+            "--status",
+            "published",
+            "--page-size",
+            "1",
+            "--list-page",
+            "3",
+        ])
+        .assert_json_ok();
+    assert!(published_all["subtitles"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn t5_c3_11_subtitle_upload_tolerates_transient_poll_errors() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+
+    // 跳过提交前的落库基线扫描（第 1 次 author/list），让回查的第 1 次轮询返回 HTTP 500，
+    // 之后恢复正常：上传仍应判定为成功
+    server.set_transient_fault(
+        "/x/v2/dm/subtitle/search/author/list",
+        FaultConfig::http(500, "boom"),
+        1,
+    );
+
+    let out = env
+        .run_bt_env(
+            &[
+                "--json",
+                "video",
+                "subtitle-upload",
+                "BV1uJ411r7hL",
+                srt.to_str().unwrap(),
+                "--lang",
+                "zh",
+            ],
+            &[("BT_SUBTITLE_VERIFY_TIMEOUT_SECS", "20")],
+        )
+        .assert_json_ok();
+
+    assert_eq!(out["verified"], true);
+    assert_eq!(out["verified_status"], 5);
+    let polls = server
+        .requests()
+        .iter()
+        .filter(|r| r.path == "/x/v2/dm/subtitle/search/author/list")
+        .count();
+    assert!(polls >= 2, "expected a retry after the transient error");
+}

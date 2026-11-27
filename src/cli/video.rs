@@ -195,6 +195,10 @@ fn subtitle_verify_timeout_secs() -> u64 {
         .unwrap_or(90)
 }
 
+/// 回查轮询每轮请求的条数。列表按 `mtime` 倒序，新版本必然在第 1 页内，
+/// 因此只查第 1 页，条数取接口上限 50 即可。
+const SUBTITLE_VERIFY_PAGE_SIZE: u32 = 50;
+
 fn select_subtitle_track<'a>(tracks: &'a [Value], lang: Option<&str>) -> Result<&'a Value> {
     if tracks.is_empty() {
         return Err(BiliLiveError::Input("该视频分P暂无可用字幕".to_string()));
@@ -859,9 +863,12 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             } else {
                 // author/list 是搜索索引，新建字幕通常要几十秒才可见（实测约 40 秒），
                 // 所以这里做有上限的轮询，既不能立即误报失败，也不能无限等待。
+                // 列表按 mtime 倒序返回，新版本必然排在首页，因此每轮只查第 1 页：
+                // 账号字幕较多时，全量翻页的轮询会把请求量放大一个数量级。
                 let verify_timeout = subtitle_verify_timeout_secs();
                 let poll_interval = std::time::Duration::from_secs(3);
-                let max_attempts = verify_timeout / poll_interval.as_secs() + 1;
+                let deadline =
+                    std::time::Instant::now() + std::time::Duration::from_secs(verify_timeout);
                 if !is_json() {
                     user_info!(
                         "正在回查字幕列表确认新版本已落库（服务端索引通常有几十秒延迟，最多等待 {} 秒）",
@@ -869,27 +876,51 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     );
                 }
                 let mut verified: Option<Value> = None;
-                for attempt in 0..max_attempts {
-                    if attempt > 0 {
-                        std::thread::sleep(poll_interval);
-                    }
-                    let (after, _) = crate::api::subtitle::list_all_subtitles(&cookies, 50)?;
-                    verified = after
-                        .iter()
-                        .find(|item| {
-                            item["oid"].as_i64() == Some(resolved.cid)
-                                && item["lan"].as_str() == Some(normalized_lang.as_str())
-                                && item["id_str"]
-                                    .as_str()
-                                    .is_some_and(|id| !before_ids.contains(id))
-                        })
-                        .cloned();
-                    if verified.is_some() {
+                let mut last_error: Option<BiliLiveError> = None;
+                let mut polls = 0usize;
+                loop {
+                    // 用真实时间窗口而非「次数 × 间隔」控制超时：单次请求耗时也算在预算内
+                    if std::time::Instant::now() >= deadline {
                         break;
                     }
+                    match crate::api::subtitle::list_my_subtitles(
+                        &cookies,
+                        1,
+                        SUBTITLE_VERIFY_PAGE_SIZE,
+                        None,
+                    ) {
+                        Ok(data) => {
+                            polls += 1;
+                            verified = data["subtitles"]
+                                .as_array()
+                                .map(|v| v.as_slice())
+                                .unwrap_or(&[])
+                                .iter()
+                                .find(|item| {
+                                    item["oid"].as_i64() == Some(resolved.cid)
+                                        && item["lan"].as_str() == Some(normalized_lang.as_str())
+                                        && item["id_str"]
+                                            .as_str()
+                                            .is_some_and(|id| !before_ids.contains(id))
+                                })
+                                .cloned();
+                            if verified.is_some() {
+                                break;
+                            }
+                        }
+                        // 轮询期间的瞬时网络/接口抖动不该让整次上传失败：记录最近一次错误后继续轮询
+                        Err(err) => last_error = Some(err),
+                    }
+                    crate::utils::interrupt::sleep_interruptible(poll_interval)?;
                 }
                 let Some(verified) = verified else {
-                    return Err(BiliLiveError::Api(format!(
+                    // 全程一次都没查成功时直接暴露底层错误，不把网络问题伪装成「没落库」
+                    if polls == 0
+                        && let Some(err) = last_error
+                    {
+                        return Err(err);
+                    }
+                    let mut message = format!(
                         "提交接口返回成功，但 {timeout} 秒内未在字幕列表中确认到 {bvid} P{page}（cid={cid}, lan={lan}）的新条目；\
                          为避免误报成功，本次结果按失败处理，请用 `bit video subtitle-list {bvid} -p {page}` 复核",
                         timeout = verify_timeout,
@@ -897,7 +928,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                         page = resolved.page,
                         cid = resolved.cid,
                         lan = normalized_lang,
-                    )));
+                    );
+                    if let Some(err) = last_error {
+                        message.push_str(&format!("；轮询期间最近一次查询错误：{err}"));
+                    }
+                    return Err(BiliLiveError::Api(message));
                 };
                 Some(verified)
             };
@@ -996,16 +1031,9 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             page_num,
             page_size,
         } => {
-            let Some(cookies) = crate::auth::cookies::read_cookies()
-                .ok()
-                .filter(|c| !c.sessdata.trim().is_empty())
-            else {
-                return Err(BiliLiveError::Auth(
-                    "未检测到登录信息，请执行 `bit auth login` 进行登录".to_string(),
-                ));
-            };
+            let cookies = crate::auth::ensure_login()?;
 
-            let (scope, cid, bvid, items, account_total) = match video {
+            let (scope, cid, bvid, items, matched_total, account_total) = match video {
                 Some(video) => {
                     let (target_page, info) =
                         crate::api::video::resolve_video_context(&video, Some(&cookies))?;
@@ -1022,31 +1050,42 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                         })
                         .cloned()
                         .collect();
+                    let matched_total = matched.len() as i64;
                     (
                         "page",
                         Some(resolved.cid),
                         Some(resolved.bvid),
                         matched,
+                        matched_total,
                         account_total,
                     )
                 }
                 None => {
-                    let data = crate::api::subtitle::list_my_subtitles(
-                        &cookies, page_num, page_size, None,
-                    )?;
-                    let account_total = data["total"]
-                        .as_i64()
-                        .or_else(|| data["page"]["total"].as_i64())
-                        .unwrap_or(0);
-                    let matched: Vec<Value> = data["subtitles"]
-                        .as_array()
-                        .map(|v| v.as_slice())
-                        .unwrap_or(&[])
+                    // 账号范围：先翻完所有分页再按状态过滤，最后在过滤结果上分页。
+                    // 只取 `--list-page` 指定的一页再本地过滤，会漏掉后续分页里的草稿/已删除记录，
+                    // 查询结果因此不完整；这里用「按需翻页过滤」保证结果集完整。
+                    let (all, account_total) =
+                        crate::api::subtitle::list_all_subtitles(&cookies, page_size)?;
+                    let matched: Vec<Value> = all
                         .iter()
                         .filter(|item| status.matches(item["status"].as_i64().unwrap_or(0)))
                         .cloned()
                         .collect();
-                    ("account", None, None, matched, account_total)
+                    let matched_total = matched.len() as i64;
+                    let offset = (page_num.saturating_sub(1) as usize) * page_size as usize;
+                    let page_items: Vec<Value> = matched
+                        .into_iter()
+                        .skip(offset)
+                        .take(page_size as usize)
+                        .collect();
+                    (
+                        "account",
+                        None,
+                        None,
+                        page_items,
+                        matched_total,
+                        account_total,
+                    )
                 }
             };
 
@@ -1075,6 +1114,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     "cid": cid,
                     "bvid": bvid,
                     "total": subtitles.len(),
+                    "matched_total": matched_total,
                     "account_total": account_total,
                     "subtitles": subtitles,
                 }))?;
@@ -1091,7 +1131,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     "分P cid={}",
                     cid.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string())
                 ),
-                _ => "全账号".to_string(),
+                _ => format!("全账号 · 第 {page_num} 页"),
             };
             print_spacer();
             print_section_header(
@@ -1134,10 +1174,20 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 .collect();
             print_table(&columns, &rows);
             print_spacer();
-            user_info!(
-                "账号字幕总数 {}；同一 (分P, 语言) 的多条记录是不同版本，删除只是软删除（status=4）",
-                account_total
-            );
+            if scope == "page" {
+                user_info!(
+                    "账号字幕总数 {}；同一 (分P, 语言) 的多条记录是不同版本，删除只是软删除（status=4）",
+                    account_total
+                );
+            } else {
+                user_info!(
+                    "账号字幕总数 {}；当前过滤条件匹配 {} 条，本页显示 {} 条",
+                    account_total,
+                    matched_total,
+                    subtitles.len()
+                );
+                user_info!("同一 (分P, 语言) 的多条记录是不同版本，删除只是软删除（status=4）");
+            }
         }
 
         VideoCommands::SubtitleDelete { video, ids, page } => {
@@ -1233,9 +1283,12 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
 
             let mut deleted: Vec<String> = Vec::new();
             for (idx, id) in requested.iter().enumerate() {
-                // 连发会被服务端静默吞掉，逐个删除之间至少间隔 1 秒
+                // 连发会被服务端静默吞掉，逐个删除之间至少间隔 1 秒。
+                // 用可中断睡眠：Ctrl+C 时立刻返回 Interrupted 而不是等满 1 秒。
                 if idx > 0 {
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                    crate::utils::interrupt::sleep_interruptible(
+                        std::time::Duration::from_millis(1000),
+                    )?;
                 }
                 crate::api::subtitle::delete_subtitle(&cookies, resolved.cid, id)?;
                 deleted.push(id.clone());

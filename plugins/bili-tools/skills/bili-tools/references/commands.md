@@ -45,20 +45,21 @@
 ## Subtitle Track Options (`video subtitle-upload` / `subtitle-list` / `subtitle-delete`)
 
 ```bash
-bit video subtitle-upload <VIDEO> <FILE> --lang <CODE> [-p N] [--draft] [--sign] [--dry-run]
-bit video subtitle-list [VIDEO] [-p N] [--status all|draft|published|deleted] [--page N] [--page-size N]
+bit video subtitle-upload <VIDEO> <FILE> --lang <CODE> [-p N] [--draft] [--sign] [--no-verify] [--dry-run]
+bit video subtitle-list [VIDEO] [-p N] [--status all|draft|published|deleted] [--list-page N] [--page-size N]
 bit video subtitle-delete <VIDEO> --id <SUBTITLE_ID> [--id ...] [-p N] [-y]
 ```
 
+- **Part (`-p`, alias `--page` / `--part`)**: all three subcommands use `-p` for the part number; `--list-page` (not `--page`) paginates the account-wide listing.
 - **Input**: `subtitle-upload` only accepts `.srt`; it is converted to BCC client-side (raw SRT is rejected by Bilibili).
-- **Language (`--lang`)**: base ISO codes `en`, `zh`, `zh-Hant`, `ja`, `ko`. `zh-Hans` / `zh-CN` / `en-US` are normalized (`zh`, `zh`, `en`); anything else fails with an `Input` error before any request.
+- **Language (`--lang`)**: base ISO codes `en`, `zh`, `zh-Hant`, `ja`, `ko`. Only the listed aliases are accepted and normalized: `zh-Hans`/`zh-CN`→`zh`, `zh-TW`/`zh-HK`/`zh-MO`→`zh-Hant`, `en-US`→`en`, `ja-JP`→`ja`, `ko-KR`→`ko`. Any other value (e.g. `jp`, `zh-foo`, `en-GB`) fails with an `Input` error before any request.
 - **Versioning**: subtitle tracks are bound to `cid` (part), and each upload adds a new version for the same `(cid, lang)`; old versions stay in the list.
 - **Draft (`--draft`)**: sends `submit=0` (not submitted for review). Without it, `submit=1`.
 - **Dry run (`--dry-run`)**: parses and converts only, zero network requests, no login required; JSON contains the full `bcc` object and entry/timeline stats.
-- **Listing**: always uses `author/list`. With `VIDEO` it resolves the cid and filters by `oid`; `-p/--part` selects the part while `--page` paginates the account list.
+- **Listing**: always uses `author/list`. With `VIDEO` it resolves the cid and filters by `oid` (all pages). Without `VIDEO` it scans all pages, applies `--status`, then pages the filtered result with `--list-page`/`--page-size`; JSON reports `matched_total` (matches overall) alongside `total` (returned here) and `account_total`.
 - **Review delay**: after submit, anonymous playback waits for approval (a few minutes). Not visible anonymously ≠ failure.
-- **Verification**: after `draft/save`, the command polls `author/list` for a new `(cid, lang)` entry (server index lag measured ~40 s; default budget 90 s). If no new version appears, it fails instead of reporting a false success.
-- **`--no-verify`**: skip that poll (each poll scans the whole account list, so it is slow for large batches). JSON reports `verified=false`; verify afterwards with `subtitle-list`.
+- **Verification**: after `draft/save`, the command polls page 1 of `author/list` for a new `(cid, lang)` entry (the list is `mtime`-descending, so a new version is always there; server index lag measured ~40 s; default budget 90 s, wall-clock). If no new version appears, it fails instead of reporting a false success; transient poll errors are retried within that budget, and if every poll failed the underlying error is reported.
+- **`--no-verify`**: skip that poll (useful for large batches). JSON reports `verified=false`; verify afterwards with `subtitle-list`.
 - **Deletion**: soft delete; `status` first becomes `4` (visible in the list for a short window) and the server later drops the entry. Non-interactive or `--json` invocations require `-y`.
 
 ## JSON Error Envelope Kinds

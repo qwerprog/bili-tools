@@ -534,6 +534,7 @@ pub struct MockBiliServer {
     state: Arc<Mutex<MockState>>,
     requests: Arc<Mutex<Vec<RecordedRequest>>>,
     faults: Arc<Mutex<HashMap<String, FaultConfig>>>,
+    transient_faults: Arc<Mutex<HashMap<String, PendingFault>>>,
     stop: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
 }
@@ -545,11 +546,13 @@ impl MockBiliServer {
         let state = Arc::new(Mutex::new(MockState::new(port)));
         let requests = Arc::new(Mutex::new(Vec::new()));
         let faults = Arc::new(Mutex::new(HashMap::new()));
+        let transient_faults = Arc::new(Mutex::new(HashMap::new()));
         let stop = Arc::new(AtomicBool::new(false));
 
         let state_bg = Arc::clone(&state);
         let requests_bg = Arc::clone(&requests);
         let faults_bg = Arc::clone(&faults);
+        let transient_bg = Arc::clone(&transient_faults);
         let stop_bg = Arc::clone(&stop);
 
         let handle = std::thread::spawn(move || {
@@ -561,13 +564,14 @@ impl MockBiliServer {
                     let state_w = Arc::clone(&state_bg);
                     let requests_w = Arc::clone(&requests_bg);
                     let faults_w = Arc::clone(&faults_bg);
+                    let transient_w = Arc::clone(&transient_bg);
                     std::thread::spawn(move || {
                         if let Ok(Some(req)) = read_http_request(&mut stream) {
                             requests_w
                                 .lock()
                                 .unwrap_or_else(|e| e.into_inner())
                                 .push(req.clone());
-                            let resp = dispatch(&req, &state_w, &faults_w);
+                            let resp = dispatch(&req, &state_w, &faults_w, &transient_w);
                             let _ = resp.write_to(&mut stream);
                         }
                     });
@@ -580,6 +584,7 @@ impl MockBiliServer {
             state,
             requests,
             faults,
+            transient_faults,
             stop,
             handle: Some(handle),
         }
@@ -618,6 +623,26 @@ impl MockBiliServer {
             .insert(route.into(), fault);
     }
 
+    /// 只生效一次的故障：命中后被移除，用于验证客户端对瞬时错误的容错。
+    /// `skip_hits` 为在生效前放过的命中次数（例如同一路径上先有前置调用时传 1）。
+    pub fn set_transient_fault(
+        &self,
+        route: impl Into<String>,
+        fault: FaultConfig,
+        skip_hits: usize,
+    ) {
+        self.transient_faults
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(
+                route.into(),
+                PendingFault {
+                    fault,
+                    skip: skip_hits,
+                },
+            );
+    }
+
     pub fn clear_fault(&self, route: &str) {
         self.faults
             .lock()
@@ -627,6 +652,10 @@ impl MockBiliServer {
 
     pub fn clear_all_faults(&self) {
         self.faults
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        self.transient_faults
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
@@ -942,20 +971,43 @@ fn read_http_request(stream: &mut TcpStream) -> std::io::Result<Option<RecordedR
     }))
 }
 
-fn find_fault(faults: &HashMap<String, FaultConfig>, path: &str) -> Option<FaultConfig> {
-    if let Some(exact) = faults.get(path) {
-        return Some(exact.clone());
+/// 待生效的一次性故障：跳过 `skip` 次命中后返回一次 `fault`，随后自动移除
+#[derive(Debug, Clone)]
+struct PendingFault {
+    fault: FaultConfig,
+    skip: usize,
+}
+
+/// 命中给定路径的故障键：精确匹配优先，其次是最长的 `前缀*` 模式
+fn matched_fault_route<V>(faults: &HashMap<String, V>, path: &str) -> Option<String> {
+    if faults.contains_key(path) {
+        return Some(path.to_string());
     }
-    let mut best: Option<(&str, &FaultConfig)> = None;
-    for (pattern, cfg) in faults {
+    let mut best: Option<&str> = None;
+    for pattern in faults.keys() {
         if let Some(prefix) = pattern.strip_suffix('*')
             && path.starts_with(prefix)
-            && best.is_none_or(|(best_p, _)| prefix.len() > best_p.len())
+            && best.is_none_or(|best_prefix| prefix.len() > best_prefix.len())
         {
-            best = Some((prefix, cfg));
+            best = Some(prefix);
         }
     }
-    best.map(|(_, cfg)| cfg.clone())
+    best.map(|prefix| format!("{prefix}*"))
+}
+
+fn find_fault(faults: &HashMap<String, FaultConfig>, path: &str) -> Option<FaultConfig> {
+    matched_fault_route(faults, path).and_then(|key| faults.get(&key).cloned())
+}
+
+/// 取出本次命中应当返回的一次性故障；尚在跳过期的条目只递减计数
+fn take_pending_fault(faults: &mut HashMap<String, PendingFault>, path: &str) -> Option<FaultConfig> {
+    let key = matched_fault_route(faults, path)?;
+    let pending = faults.get_mut(&key)?;
+    if pending.skip > 0 {
+        pending.skip -= 1;
+        return None;
+    }
+    faults.remove(&key).map(|pending| pending.fault)
 }
 
 fn apply_fault(fault: FaultConfig) -> HttpResponse {
@@ -1108,7 +1160,15 @@ fn dispatch(
     req: &RecordedRequest,
     state_lock: &Arc<Mutex<MockState>>,
     faults_lock: &Arc<Mutex<HashMap<String, FaultConfig>>>,
+    transient_lock: &Arc<Mutex<HashMap<String, PendingFault>>>,
 ) -> HttpResponse {
+    // 一次性故障优先：命中即移除，后续同一路径恢复正常响应
+    if let Some(fault) = take_pending_fault(
+        &mut transient_lock.lock().unwrap_or_else(|e| e.into_inner()),
+        &req.path,
+    ) {
+        return apply_fault(fault);
+    }
     if let Some(fault) = find_fault(&faults_lock.lock().unwrap_or_else(|e| e.into_inner()), &req.path)
     {
         return apply_fault(fault);

@@ -728,7 +728,7 @@ pub enum VideoCommands {
         lang: String,
 
         /// 分P编号 (从 1 开始；默认取 URL 中的 p 参数或 1)
-        #[arg(short = 'p', long, value_parser = clap::value_parser!(u32).range(1..))]
+        #[arg(short = 'p', long, alias = "part", value_parser = clap::value_parser!(u32).range(1..))]
         page: Option<u32>,
 
         /// 仅保存草稿，不提交审核 (submit=0)
@@ -755,15 +755,15 @@ pub enum VideoCommands {
         video: Option<String>,
 
         /// 分P编号 (从 1 开始；默认取 URL 中的 p 参数或 1)
-        #[arg(short = 'p', long = "part", value_parser = clap::value_parser!(u32).range(1..))]
+        #[arg(short = 'p', long, alias = "part", value_parser = clap::value_parser!(u32).range(1..))]
         page: Option<u32>,
 
         /// 状态过滤 (all, draft, published, deleted)
         #[arg(long, value_enum, default_value_t = SubtitleStatusFilter::All)]
         status: SubtitleStatusFilter,
 
-        /// 账号字幕列表页码 (从 1 开始；指定 VIDEO 时扫描全部分页并按 cid 过滤)
-        #[arg(long = "page", default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..))]
+        /// 结果页码 (从 1 开始；指定 VIDEO 时该参数无效，会扫描全部分页并按 cid 过滤)
+        #[arg(long = "list-page", default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..))]
         page_num: u32,
 
         /// 每页条数 (1-50)
@@ -781,7 +781,7 @@ pub enum VideoCommands {
         ids: Vec<String>,
 
         /// 分P编号 (从 1 开始；默认取 URL 中的 p 参数或 1)
-        #[arg(short = 'p', long = "part", value_parser = clap::value_parser!(u32).range(1..))]
+        #[arg(short = 'p', long, alias = "part", value_parser = clap::value_parser!(u32).range(1..))]
         page: Option<u32>,
     },
 
