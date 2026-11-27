@@ -22,6 +22,21 @@ pub const SUBTITLE_ORIGIN: &str = "https://member.bilibili.com";
 /// 都会返回 `79011 不合法的语言`）；注意与下载侧 `--lang` 的匹配规则不同。
 pub const SUPPORTED_LANS: [&str; 5] = ["en", "zh", "zh-Hant", "ja", "ko"];
 
+/// 明确支持的别名（全小写书写形式）→ [`SUPPORTED_LANS`] 内的规范语言码。
+///
+/// 别名只做**整段**匹配，不再把复合码截断成 `-` 前的主码：截断会把 `zh-TW` /
+/// `zh-HK` / `zh-MO` 这类繁体区码误判成简体 `zh`，还会放行 `zh-foo` 这种非法子标签。
+const LAN_ALIASES: [(&str, &str); 8] = [
+    ("zh-hans", "zh"),
+    ("zh-cn", "zh"),
+    ("zh-tw", "zh-Hant"),
+    ("zh-hk", "zh-Hant"),
+    ("zh-mo", "zh-Hant"),
+    ("en-us", "en"),
+    ("ja-jp", "ja"),
+    ("ko-kr", "ko"),
+];
+
 /// BCC（Bilibili Closed Caption）单条字幕
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BccCue {
@@ -83,21 +98,18 @@ pub fn srt_to_bcc(text: &str) -> Result<(Bcc, SrtStats)> {
     let mut cues: Vec<BccCue> = Vec::new();
     let mut stats = SrtStats::default();
 
-    for block in normalized.split("\n\n") {
-        let lines: Vec<&str> = block
-            .split('\n')
-            .filter(|line| !line.trim().is_empty())
-            .collect();
+    for lines in split_blocks(&normalized) {
         if lines.len() < 2 {
             continue;
         }
 
-        let time_idx = if is_pure_digits(lines[0]) { 1 } else { 0 };
+        // 序号行可能带前导空格或 Tab（`" 1"`），判定前先 trim 掉
+        let time_idx = if is_pure_digits(lines[0].trim()) { 1 } else { 0 };
         if time_idx >= lines.len() {
             continue;
         }
 
-        let Some((mut from, mut to)) = parse_time_range(lines[time_idx]) else {
+        let Some((from, to)) = parse_time_range(lines[time_idx]) else {
             continue;
         };
         stats.parsed += 1;
@@ -112,6 +124,11 @@ pub fn srt_to_bcc(text: &str) -> Result<(Bcc, SrtStats)> {
             continue;
         }
 
+        // 先按播放器精度（0.01s）舍入，再做单调性与最小时长修正：
+        // 反过来会把 `1.001 --> 1.004` 这类区间先判定为合法、再舍入成 `1.00 --> 1.00` 的零时长条目。
+        let mut from = round2(from);
+        let mut to = round2(to);
+
         // 累加式时间轴会让 B 站播放器错乱（叠字、跳条），强制单调递增
         if let Some(last) = cues.last()
             && from < last.to
@@ -119,12 +136,12 @@ pub fn srt_to_bcc(text: &str) -> Result<(Bcc, SrtStats)> {
             from = last.to;
         }
         if to <= from {
-            to = from + 0.1;
+            to = round2(from + 0.1);
         }
 
         cues.push(BccCue {
-            from: round2(from),
-            to: round2(to),
+            from,
+            to,
             location: 2,
             content,
         });
@@ -143,15 +160,17 @@ pub fn srt_to_bcc(text: &str) -> Result<(Bcc, SrtStats)> {
 
 /// 归一化并校验上传用的语言码。
 ///
-/// 白名单内的值原样保留（包括合法的复合码 `zh-Hant`）；其余输入先取 `-` 前的主码
-/// （`en-US` → `en`、`zh-CN` → `zh`），再映射 `zh-Hans` → `zh`，最后按白名单校验。
-/// 不在白名单内的值在发请求前直接报 `Input`。
+/// 白名单 [`SUPPORTED_LANS`] 内的值大小写不敏感地原样保留（含合法的复合码 `zh-Hant`）；
+/// 白名单外只接受 [`LAN_ALIASES`] 里逐条列出的别名，其余在发请求前直接报 `Input`。
+/// 不做「取 `-` 前主码」的隐式截断——那样会把 `zh-TW`/`zh-HK`/`zh-MO` 误判成简体 `zh`，
+/// 也会放行 `zh-foo` 这类非法子标签。
 pub fn normalize_lan(raw: &str) -> Result<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Err(BiliLiveError::Input(
-            "字幕语言代码不能为空；允许的取值：en, zh, zh-Hant, ja, ko".to_string(),
-        ));
+        return Err(BiliLiveError::Input(format!(
+            "字幕语言代码不能为空；允许的取值：{}",
+            lan_hint()
+        )));
     }
 
     if let Some(hit) = SUPPORTED_LANS
@@ -161,24 +180,25 @@ pub fn normalize_lan(raw: &str) -> Result<String> {
         return Ok((*hit).to_string());
     }
 
-    let primary = trimmed
-        .split('-')
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let normalized = match primary.as_str() {
-        "zh-hans" => "zh".to_string(),
-        other => other.to_string(),
-    };
-
-    if SUPPORTED_LANS.contains(&normalized.as_str()) {
-        Ok(normalized)
-    } else {
-        Err(BiliLiveError::Input(format!(
-            "不支持的字幕语言代码: {raw}（归一化后为 {normalized}）；允许的取值：{}",
-            SUPPORTED_LANS.join(", ")
-        )))
+    let lower = trimmed.to_ascii_lowercase();
+    if let Some((_, canonical)) = LAN_ALIASES.iter().find(|(alias, _)| *alias == lower) {
+        return Ok((*canonical).to_string());
     }
+
+    Err(BiliLiveError::Input(format!(
+        "不支持的字幕语言代码: {raw}；允许的取值：{}",
+        lan_hint()
+    )))
+}
+
+/// 语言码报错文案里的取值说明：规范码 + 明确支持的别名
+fn lan_hint() -> String {
+    let aliases: Vec<&str> = LAN_ALIASES.iter().map(|(alias, _)| *alias).collect();
+    format!(
+        "{}（另接受别名 {}）",
+        SUPPORTED_LANS.join(", "),
+        aliases.join(", ")
+    )
 }
 
 /// `status` 字段的可读文本：1 草稿、4 已删除、5 已发布
@@ -407,12 +427,15 @@ fn parse_timestamp(input: &str) -> Option<(f64, &str)> {
     let rest = rest
         .strip_prefix(',')
         .or_else(|| rest.strip_prefix('.'))?;
+    // 小数部分允许 1~3 位，按实际位数换算：`00:00:01.5` 是 500ms，不是 5ms
+    let before_millis = rest;
     let (millis, rest) = take_digits(rest, 1, 3)?;
+    let millis_digits = (before_millis.len() - rest.len()) as i32;
 
     let total = hours as f64 * 3600.0
         + minutes as f64 * 60.0
         + seconds as f64
-        + millis as f64 / 1000.0;
+        + millis as f64 / 10f64.powi(millis_digits);
     Some((total, rest))
 }
 
@@ -431,6 +454,27 @@ fn take_digits(input: &str, min: usize, max: usize) -> Option<(u64, &str)> {
 
 fn is_pure_digits(line: &str) -> bool {
     !line.is_empty() && line.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// 按「空白分隔行」切块：空行、只含空格或 Tab 的行都算分隔符（不要求恰好是空字符串）。
+///
+/// 返回的每块只含非空白行，并保留各行原始内容（除判定空行外不做 trim，避免动到字幕正文）。
+fn split_blocks(text: &str) -> Vec<Vec<&str>> {
+    let mut blocks: Vec<Vec<&str>> = Vec::new();
+    let mut current: Vec<&str> = Vec::new();
+    for line in text.split('\n') {
+        if line.trim().is_empty() {
+            if !current.is_empty() {
+                blocks.push(std::mem::take(&mut current));
+            }
+        } else {
+            current.push(line);
+        }
+    }
+    if !current.is_empty() {
+        blocks.push(current);
+    }
+    blocks
 }
 
 /// 删除 `<...>` 形式的样式标签；未闭合的 `<` 或空标签 `<>` 按字面保留。
@@ -532,6 +576,52 @@ mod tests {
             Err(BiliLiveError::Input(_))
         ));
         assert!(matches!(normalize_lan("  "), Err(BiliLiveError::Input(_))));
+    }
+
+    #[test]
+    fn maps_traditional_chinese_aliases_to_hant_without_truncating_subtags() {
+        // 繁体区码必须归一化为 zh-Hant，而不是被截断成简体 zh
+        assert_eq!(normalize_lan("zh-TW").unwrap(), "zh-Hant");
+        assert_eq!(normalize_lan("zh-HK").unwrap(), "zh-Hant");
+        assert_eq!(normalize_lan("zh-MO").unwrap(), "zh-Hant");
+        assert_eq!(normalize_lan("zh-hant").unwrap(), "zh-Hant");
+
+        // 别名表之外的子标签不再被隐式截断放行
+        for raw in ["zh-foo", "zh-hant-tw", "zh-Hans-CN", "en-GB", "ja-JP-x"] {
+            assert!(
+                matches!(normalize_lan(raw), Err(BiliLiveError::Input(_))),
+                "{raw} 应被拒绝"
+            );
+        }
+    }
+
+    #[test]
+    fn parses_short_fractional_seconds_by_actual_digit_count() {
+        let srt = "1\n00:00:01.5 --> 00:00:02.25\nA\n\n2\n00:00:03,5 --> 00:00:04,25\nB\n";
+        let (bcc, _) = srt_to_bcc(srt).unwrap();
+        assert_eq!(bcc.body[0], cue(1.5, 2.25, "A"));
+        assert_eq!(bcc.body[1], cue(3.5, 4.25, "B"));
+    }
+
+    #[test]
+    fn splits_blocks_on_whitespace_only_separator_lines_and_trims_index() {
+        // 分隔行是 " \t" 而不是空字符串；序号行带前导空格
+        let srt = " 1 \n00:00:01,000 --> 00:00:02,000\nA\n \t\n 2\n00:00:03,000 --> 00:00:04,000\nB\n";
+        let (bcc, stats) = srt_to_bcc(srt).unwrap();
+        assert_eq!(stats.parsed, 2);
+        assert_eq!(stats.kept, 2);
+        assert_eq!(bcc.body[0], cue(1.0, 2.0, "A"));
+        assert_eq!(bcc.body[1], cue(3.0, 4.0, "B"));
+    }
+
+    #[test]
+    fn rounds_before_monotonic_and_min_duration_correction() {
+        // 舍入后会退化成零时长的区间必须先舍入再修正
+        let srt = "1\n00:00:01,001 --> 00:00:01,004\nA\n\n2\n00:00:02,001 --> 00:00:02,004\nB\n";
+        let (bcc, _) = srt_to_bcc(srt).unwrap();
+        assert_eq!(bcc.body[0], cue(1.0, 1.1, "A"));
+        assert_eq!(bcc.body[1], cue(2.0, 2.1, "B"));
+        assert!(bcc.body[1].from >= bcc.body[0].to);
     }
 
     #[test]
