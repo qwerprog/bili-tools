@@ -2435,6 +2435,11 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             };
 
             let parsed_dtime = dtime.as_deref().map(parse_schedule_dtime).transpose()?;
+            if let Some(ref q) = topic
+                && q.trim().is_empty()
+            {
+                return Err(BiliLiveError::Input("活动/话题名称不能为空".to_string()));
+            }
 
             let cookies = crate::auth::ensure_csrf()?;
 
@@ -2812,6 +2817,18 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 .as_deref()
                 .map(crate::api::upload::normalize_tags)
                 .transpose()?;
+            if let Some(ref q) = topic
+                && q.trim().is_empty()
+            {
+                return Err(BiliLiveError::Input("活动/话题名称不能为空".to_string()));
+            }
+            if let Some(ref c) = cover
+                && c.trim().is_empty()
+            {
+                return Err(BiliLiveError::Input(
+                    "16:9 主封面不能为空（清空 4:3 封面请使用 --cover43 \"\"）".to_string(),
+                ));
+            }
 
             let mut changed_labels: Vec<&str> = Vec::new();
             if validated_title.is_some() {
@@ -2916,12 +2933,8 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
 
             let uploaded_cover = match cover {
                 Some(ref c) => {
-                    if c.trim().is_empty() {
-                        Some(String::new())
-                    } else {
-                        user_info!("正在处理 16:9 主封面...");
-                        Some(crate::api::upload::upload_cover_image(&cookies, c)?)
-                    }
+                    user_info!("正在处理 16:9 主封面...");
+                    Some(crate::api::upload::upload_cover_image(&cookies, c)?)
                 }
                 None => None,
             };

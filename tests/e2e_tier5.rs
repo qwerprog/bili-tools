@@ -2339,6 +2339,10 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
     server.reset_requests();
     env.run_bt(&["--json", "video", "edit", "BV1uJ411r7hL"])
         .assert_json_err(Some("Input"));
+    env.run_bt(&["--json", "video", "edit", "BV1uJ411r7hL", "--topic", "   "])
+        .assert_json_err(Some("Input"));
+    env.run_bt(&["--json", "video", "edit", "BV1uJ411r7hL", "--cover", ""])
+        .assert_json_err(Some("Input"));
     assert!(server.requests().is_empty());
 
     // Requires -y in --json mode
@@ -2436,6 +2440,23 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
         .assert_json_ok();
     assert_eq!(topics_search["count"], 1);
     assert_eq!(topics_search["topics"][0]["mission_id"], 4072350);
+
+    // 3d. Topic resolution surfaces search API errors instead of swallowing them
+    server.set_transient_fault(
+        "/x/vupre/web/topic/search",
+        FaultConfig::http(500, "search down"),
+        0,
+    );
+    env.run_bt(&[
+        "--json",
+        "-y",
+        "video",
+        "edit",
+        "BV1uJ411r7hL",
+        "--topic",
+        "影视神仙剪刀手",
+    ])
+    .assert_json_err(Some("Api"));
 
     // 4. Creative Center Studio list & show (biliup list / show parity)
     env.run_bt(&["video", "studio", "ls", "--status", "pubing"])

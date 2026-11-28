@@ -879,7 +879,23 @@ pub fn search_studio_topics(
     Ok(parse_topic_list(&json["data"]))
 }
 
-/// 按名称解析活动/话题（先调搜索接口，无结果时回退分区列表；优先精确匹配活动名/话题名）
+fn find_exact_topic(candidates: &[StudioTopic], q: &str) -> Option<StudioTopic> {
+    // 1. 精确匹配 topic_name（若存在多个优先选带 mission_id 的活动标签）
+    if let Some(m) = candidates
+        .iter()
+        .filter(|t| t.topic_name.eq_ignore_ascii_case(q))
+        .max_by_key(|t| t.mission_id > 0)
+    {
+        return Some(m.clone());
+    }
+    // 2. 精确匹配 mission_name
+    candidates
+        .iter()
+        .find(|t| !t.mission_name.is_empty() && t.mission_name.eq_ignore_ascii_case(q))
+        .cloned()
+}
+
+/// 按名称解析活动/话题（先调搜索接口，未精确命中时补充查询分区列表；优先精确匹配活动名/话题名）
 pub fn resolve_studio_topic(
     cookies: &Cookies,
     query: &str,
@@ -890,26 +906,21 @@ pub fn resolve_studio_topic(
         return Err(BiliLiveError::Input("活动/话题名称不能为空".to_string()));
     }
 
-    let mut candidates = search_studio_topics(cookies, q, 20, 0).unwrap_or_default();
-    if candidates.is_empty() {
-        candidates = list_studio_topics(cookies, tid, 1, 50)?;
+    let mut candidates = search_studio_topics(cookies, q, 20, 0)?;
+    if let Some(exact) = find_exact_topic(&candidates, q) {
+        return Ok(exact);
     }
 
-    // 1. 精确匹配 topic_name（若存在多个优先选带 mission_id 的活动标签）
-    if let Some(m) = candidates
-        .iter()
-        .filter(|t| t.topic_name.eq_ignore_ascii_case(q))
-        .max_by_key(|t| t.mission_id > 0)
-    {
-        return Ok(m.clone());
+    let fallback = list_studio_topics(cookies, tid, 1, 50)?;
+    for item in fallback {
+        if !candidates.iter().any(|c| c.topic_id == item.topic_id) {
+            candidates.push(item);
+        }
     }
-    // 2. 精确匹配 mission_name
-    if let Some(m) = candidates
-        .iter()
-        .find(|t| !t.mission_name.is_empty() && t.mission_name.eq_ignore_ascii_case(q))
-    {
-        return Ok(m.clone());
+    if let Some(exact) = find_exact_topic(&candidates, q) {
+        return Ok(exact);
     }
+
     // 3. 子串匹配（唯一匹配时直接选用，多个匹配时返回候选项提示避免误绑）
     let q_lower = q.to_lowercase();
     let partials: Vec<&StudioTopic> = candidates
@@ -1175,9 +1186,13 @@ fn build_edit_payload(
         .dynamic
         .as_deref()
         .unwrap_or_else(|| arc["dynamic"].as_str().unwrap_or(""));
-    let no_reprint = match patch.no_reprint {
-        Some(v) => i64::from(copyright == 1 && v),
-        None => arc["no_reprint"].as_i64().unwrap_or(1),
+    let no_reprint = if copyright != 1 {
+        0
+    } else {
+        match patch.no_reprint {
+            Some(v) => i64::from(v),
+            None => arc["no_reprint"].as_i64().unwrap_or(1),
+        }
     };
     let recreate = arc["recreate"]
         .as_i64()
@@ -1557,9 +1572,19 @@ mod tests {
             mission_id: Some(0),
             ..ArchiveEditPatch::default()
         };
-        let cleared = build_edit_payload(&cookies, &arc, 42, videos, &clear_patch);
+        let cleared = build_edit_payload(&cookies, &arc, 42, videos.clone(), &clear_patch);
         assert_eq!(cleared["topic_id"], 0);
         assert_eq!(cleared["mission_id"], 0);
+
+        // Switching original (no_reprint=1) to repost (copyright=2) forces no_reprint=0
+        let repost_patch = ArchiveEditPatch {
+            copyright: Some(2),
+            source: Some("https://example.com/orig".to_string()),
+            ..ArchiveEditPatch::default()
+        };
+        let repost = build_edit_payload(&cookies, &arc, 42, videos, &repost_patch);
+        assert_eq!(repost["copyright"], 2);
+        assert_eq!(repost["no_reprint"], 0);
     }
 
     #[test]

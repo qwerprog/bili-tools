@@ -1053,11 +1053,11 @@ pub struct VideoUploadArgs {
     pub topic: Option<String>,
 
     /// 直接指定活动/话题 ID (topic_id)
-    #[arg(long, value_name = "ID")]
+    #[arg(long, value_name = "ID", value_parser = clap::value_parser!(i64).range(1..))]
     pub topic_id: Option<i64>,
 
     /// 直接指定官方征稿活动 ID (mission_id)
-    #[arg(long, value_name = "ID")]
+    #[arg(long, value_name = "ID", value_parser = clap::value_parser!(i64).range(1..))]
     pub mission_id: Option<i64>,
 
     /// 视频简介
@@ -1124,11 +1124,11 @@ pub struct VideoEditArgs {
     pub topic: Option<String>,
 
     /// 直接设置或清除活动/话题 ID（传 0 清除绑定；不传则保留原值）
-    #[arg(long, value_name = "ID")]
+    #[arg(long, value_name = "ID", value_parser = clap::value_parser!(i64).range(0..))]
     pub topic_id: Option<i64>,
 
     /// 直接设置或清除官方征稿活动 ID（传 0 清除绑定；不传则保留原值）
-    #[arg(long, value_name = "ID")]
+    #[arg(long, value_name = "ID", value_parser = clap::value_parser!(i64).range(0..))]
     pub mission_id: Option<i64>,
 
     /// 修改视频简介
@@ -2412,6 +2412,37 @@ mod tests {
         assert!(Cli::try_parse_from(["bit", "video", "edit", "BV1xx", "--tid", "0"]).is_err());
         assert!(
             Cli::try_parse_from(["bit", "video", "edit", "BV1xx", "--copyright", "3"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["bit", "video", "up", "p1.mp4", "--topic-id", "0"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["bit", "video", "up", "p1.mp4", "--topic-id=-1"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["bit", "video", "up", "p1.mp4", "--mission-id", "0"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["bit", "video", "up", "p1.mp4", "--mission-id=-1"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["bit", "video", "edit", "BV1xx", "--topic-id=-1"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["bit", "video", "edit", "BV1xx", "--mission-id=-1"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from([
+                "bit",
+                "video",
+                "edit",
+                "BV1xx",
+                "--topic-id",
+                "0",
+                "--mission-id",
+                "0"
+            ])
+            .is_ok()
         );
         let tp = Cli::try_parse_from([
             "bit",
