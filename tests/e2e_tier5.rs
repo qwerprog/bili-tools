@@ -1923,10 +1923,12 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
     let p2 = env.work_dir().join("part_two.mp4");
     let p3 = env.work_dir().join("part_three.mp4");
     let cover_png = env.work_dir().join("cover.png");
+    let cover43_png = env.work_dir().join("cover43.png");
     std::fs::write(&p1, b"0123456789abcdefghij").unwrap(); // 20 bytes -> 3 chunks (chunk_size=8)
     std::fs::write(&p2, b"ABCDEFGHIJ0123456789").unwrap(); // 20 bytes -> 3 chunks
     std::fs::write(&p3, b"third_part_video_raw").unwrap();
     std::fs::write(&cover_png, b"\x89PNG\r\n\x1a\nmockpngdata").unwrap();
+    std::fs::write(&cover43_png, b"\x89PNG\r\n\x1a\nmockpng43data").unwrap();
 
     // 1. Fail-fast pre-upload validations (0 network requests!)
     server.reset_requests();
@@ -1966,6 +1968,8 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
             "Rust, 录播",
             "--cover",
             cover_png.to_str().unwrap(),
+            "--cover43",
+            cover43_png.to_str().unwrap(),
             "-l",
             "auto",
             "--limit",
@@ -1980,8 +1984,19 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
         up_json["cover"],
         "https://archive.biliimg.com/bfs/archive/mock_uploaded_cover.png"
     );
+    assert_eq!(
+        up_json["cover43"],
+        "https://archive.biliimg.com/bfs/archive/mock_uploaded_cover.png"
+    );
 
     let reqs = server.requests();
+    assert_eq!(
+        reqs.iter()
+            .filter(|r| r.method == "POST" && r.path == "/x/vu/web/cover/up")
+            .count(),
+        2,
+        "expected 2 cover uploads (16:9 cover + 4:3 cover43)"
+    );
     assert!(
         reqs.iter()
             .filter(|r| r.method == "PUT" && r.path.starts_with("/ugcfx/"))
@@ -1989,9 +2004,18 @@ fn t5_biliup_upload_append_studio_live_record_danmaku_and_sub_replies() {
             == 6,
         "expected 6 concurrent UPOS PUT chunks (3 per 20-byte file)"
     );
-    assert!(
-        reqs.iter()
-            .any(|r| r.method == "POST" && r.path == "/x/vu/web/add/v3")
+    let add_req = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.path == "/x/vu/web/add/v3")
+        .expect("expected POST /x/vu/web/add/v3 request");
+    let add_body: serde_json::Value = serde_json::from_slice(&add_req.body).unwrap();
+    assert_eq!(
+        add_body["cover"],
+        "https://archive.biliimg.com/bfs/archive/mock_uploaded_cover.png"
+    );
+    assert_eq!(
+        add_body["cover43"],
+        "https://archive.biliimg.com/bfs/archive/mock_uploaded_cover.png"
     );
 
     // 3. Append new part to existing archive (biliup append parity)

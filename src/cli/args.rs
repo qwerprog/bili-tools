@@ -909,9 +909,13 @@ pub enum VideoCommands {
         #[arg(long, default_value = "")]
         source: String,
 
-        /// 自定义封面（支持本地图片路径 jpg/png/webp 自动上传，或远程 https URL）
+        /// 自定义封面（16:9 主封面，支持本地图片路径 jpg/png/webp 自动上传，或远程 https URL）
         #[arg(long, value_name = "IMAGE")]
         cover: Option<String>,
+
+        /// 自定义 4:3 推荐封面（支持本地图片路径 jpg/png/webp 自动上传，或远程 https URL；留空由 B 站从主封面居中裁切）
+        #[arg(long, value_name = "IMAGE")]
+        cover43: Option<String>,
 
         /// 粉丝动态文案
         #[arg(long, default_value = "")]
@@ -2114,6 +2118,10 @@ mod tests {
             "122",
             "--tag",
             "Rust,Linux",
+            "--cover",
+            "cover16x9.png",
+            "--cover43",
+            "cover4x3.png",
             "-l",
             "tx",
             "--limit",
@@ -2126,10 +2134,12 @@ mod tests {
                 ref files,
                 title: Some(ref t),
                 tid: 122,
+                cover: Some(ref c),
+                cover43: Some(ref c43),
                 line: UploadLine::Cos,
                 limit: 4,
                 ..
-            })) if files.len() == 2 && t == "录播合集"
+            })) if files.len() == 2 && t == "录播合集" && c == "cover16x9.png" && c43 == "cover4x3.png"
         ));
         assert!(
             Cli::try_parse_from(["bit", "video", "append", "BV1xx", "p3.mp4", "-l", "bda2"])

@@ -1772,6 +1772,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
             copyright,
             source,
             cover,
+            cover43,
             dynamic,
             dtime,
             no_reprint,
@@ -1829,6 +1830,13 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 }
                 _ => String::new(),
             };
+            let cover43_url = match cover43 {
+                Some(ref c) if !c.trim().is_empty() => {
+                    user_info!("正在处理 4:3 推荐封面...");
+                    crate::api::upload::upload_cover_image(&cookies, c)?
+                }
+                _ => String::new(),
+            };
 
             let line_query = crate::api::upload::resolve_line_query(line);
             let mut uploaded_parts = Vec::with_capacity(files.len());
@@ -1867,6 +1875,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 copyright,
                 source,
                 cover: cover_url.clone(),
+                cover43: cover43_url.clone(),
                 dynamic,
                 dtime: parsed_dtime,
                 no_reprint,
@@ -1884,6 +1893,7 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                     "tid": tid,
                     "tag": effective_tag,
                     "cover": cover_url,
+                    "cover43": cover43_url,
                     "parts": uploaded_parts,
                     "data": res,
                 }))?;

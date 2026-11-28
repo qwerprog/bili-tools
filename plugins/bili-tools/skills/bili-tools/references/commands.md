@@ -41,6 +41,7 @@
 - `--line`: `bda2`, `qn`, `ws`, `tx`, `bldsa` (UPOS CDN line).
 - `--tid <TID>`: Bilibili partition ID (e.g., `171` 电子竞技, `17` 单机游戏, `122` 野生技术协会).
 - `--copyright <1|2>`: `1` original (default), `2` repost (requires `--source`).
+- `--cover <IMAGE>` / `--cover43 <IMAGE>`: 16:9 main cover and optional 4:3 feed cover (local `jpg`/`png`/`webp` path or remote `https` URL).
 
 ## JSON Error Envelope Kinds
 

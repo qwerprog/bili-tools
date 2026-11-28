@@ -112,6 +112,7 @@ pub struct ArchiveSubmitParams {
     pub copyright: u8,
     pub source: String,
     pub cover: String,
+    pub cover43: String,
     pub dynamic: String,
     pub dtime: Option<i64>,
     pub no_reprint: bool,
@@ -738,7 +739,7 @@ pub fn submit_archive(cookies: &Cookies, params: &ArchiveSubmitParams) -> Result
     let mut payload = json!({
         "videos": params.videos,
         "cover": params.cover,
-        "cover43": "",
+        "cover43": params.cover43,
         "title": title_trimmed,
         "copyright": params.copyright,
         "source": params.source.trim(),
