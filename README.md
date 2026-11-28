@@ -125,9 +125,11 @@ bit video like BV1hp4y1k7SV                 # 点赞
 bit video coin BV1hp4y1k7SV -n 2            # 投币 (1-2)
 bit video triple BV1hp4y1k7SV               # 一键三连
 bit video download BV1hp4y1k7SV -p 1 -Q 80 -e hevc --danmaku --subtitle --cover
-bit video upload a.mp4 --title "演示" --tid 171 --tag "工具,CLI" # UPOS 投稿（支持多 P / --line）
+bit video upload a.mp4 --title "演示" --tid 171 --tag "工具,CLI" # UPOS 投稿（支持多 P / --line / --cover43 / --topic）
 bit video append <BVID> b.mp4               # 向已有稿件追加分 P
 bit video replace <BVID> new.mp4 -t "新标题" # 替换稿件视频文件（保留 BV 号，可同时改标题，需重新审核）
+bit video edit <BVID> -t "新标题" --cover43 c4x3.png # 增量编辑稿件元数据（不重传视频，保留未指定字段与分 P）
+bit video topics --tid 171 --activity-only  # 查询创作中心可用投稿话题与官方活动标签 (topic_id / mission_id)
 bit video studio ls                         # 查看创作中心个人稿件列表
 
 # 字幕轨管理（SRT 自动转 BCC；同一个分P+语言上传多次会生成多个版本）
@@ -182,7 +184,7 @@ Commands:
   auth         账号与认证管理 (login, status, logout, refresh, daily)
   live         直播间管理、拉流、聊天与录制 (start, stop, status, info, title, area, following, stream, danmaku, chat, send, record)
   search       内容与用户搜索 (video, user, live, hot)
-  video        视频操作、下载与投稿 (info, streams, subtitle, subtitle-upload, subtitle-list, subtitle-delete, summary, tags, related, danmaku, comments, comment, like, coin, triple, download, upload, append, replace, studio)
+  video        视频操作、下载与投稿 (info, streams, subtitle, subtitle-upload, subtitle-list, subtitle-delete, summary, tags, related, danmaku, comments, comment, like, coin, triple, download, upload, append, replace, edit, topics, studio)
   user         用户主页、投稿与关系管理 (info, videos, dynamics, follow, unfollow)
   feed         查看已关注 UP 主动态流
   rank         全站视频排行榜与综合热门 (video, popular)
