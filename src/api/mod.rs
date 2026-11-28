@@ -8,6 +8,7 @@ pub mod live;
 pub mod passport;
 pub mod rank;
 pub mod search;
+pub mod subtitle;
 pub mod upload;
 pub mod user;
 pub mod video;

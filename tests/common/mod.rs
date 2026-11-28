@@ -299,6 +299,17 @@ pub struct MockComment {
 }
 
 #[derive(Debug, Clone)]
+pub struct MockSubtitle {
+    pub id_str: String,
+    pub oid: i64,
+    pub bvid: String,
+    pub lan: String,
+    pub status: i64,
+    pub mtime: i64,
+    pub data: Value,
+}
+
+#[derive(Debug, Clone)]
 pub struct MockState {
     pub port: u16,
     pub auth_logged_in: bool,
@@ -324,6 +335,8 @@ pub struct MockState {
     pub coined_videos: HashMap<i64, u32>,
     pub comments: Vec<MockComment>,
     pub next_rpid: i64,
+    pub subtitles: Vec<MockSubtitle>,
+    pub next_subtitle_id: i64,
     pub danmaku_xml_override: Option<String>,
     pub followed_mids: HashSet<i64>,
     pub short_links: HashMap<String, String>,
@@ -487,6 +500,8 @@ impl MockState {
             coined_videos: HashMap::new(),
             comments,
             next_rpid: 104192624481,
+            subtitles: Vec::new(),
+            next_subtitle_id: 2160000000000000001,
             danmaku_xml_override: None,
             followed_mids: HashSet::new(),
             short_links,
@@ -519,6 +534,7 @@ pub struct MockBiliServer {
     state: Arc<Mutex<MockState>>,
     requests: Arc<Mutex<Vec<RecordedRequest>>>,
     faults: Arc<Mutex<HashMap<String, FaultConfig>>>,
+    transient_faults: Arc<Mutex<HashMap<String, PendingFault>>>,
     stop: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
 }
@@ -530,11 +546,13 @@ impl MockBiliServer {
         let state = Arc::new(Mutex::new(MockState::new(port)));
         let requests = Arc::new(Mutex::new(Vec::new()));
         let faults = Arc::new(Mutex::new(HashMap::new()));
+        let transient_faults = Arc::new(Mutex::new(HashMap::new()));
         let stop = Arc::new(AtomicBool::new(false));
 
         let state_bg = Arc::clone(&state);
         let requests_bg = Arc::clone(&requests);
         let faults_bg = Arc::clone(&faults);
+        let transient_bg = Arc::clone(&transient_faults);
         let stop_bg = Arc::clone(&stop);
 
         let handle = std::thread::spawn(move || {
@@ -546,13 +564,14 @@ impl MockBiliServer {
                     let state_w = Arc::clone(&state_bg);
                     let requests_w = Arc::clone(&requests_bg);
                     let faults_w = Arc::clone(&faults_bg);
+                    let transient_w = Arc::clone(&transient_bg);
                     std::thread::spawn(move || {
                         if let Ok(Some(req)) = read_http_request(&mut stream) {
                             requests_w
                                 .lock()
                                 .unwrap_or_else(|e| e.into_inner())
                                 .push(req.clone());
-                            let resp = dispatch(&req, &state_w, &faults_w);
+                            let resp = dispatch(&req, &state_w, &faults_w, &transient_w);
                             let _ = resp.write_to(&mut stream);
                         }
                     });
@@ -565,6 +584,7 @@ impl MockBiliServer {
             state,
             requests,
             faults,
+            transient_faults,
             stop,
             handle: Some(handle),
         }
@@ -603,6 +623,26 @@ impl MockBiliServer {
             .insert(route.into(), fault);
     }
 
+    /// 只生效一次的故障：命中后被移除，用于验证客户端对瞬时错误的容错。
+    /// `skip_hits` 为在生效前放过的命中次数（例如同一路径上先有前置调用时传 1）。
+    pub fn set_transient_fault(
+        &self,
+        route: impl Into<String>,
+        fault: FaultConfig,
+        skip_hits: usize,
+    ) {
+        self.transient_faults
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(
+                route.into(),
+                PendingFault {
+                    fault,
+                    skip: skip_hits,
+                },
+            );
+    }
+
     pub fn clear_fault(&self, route: &str) {
         self.faults
             .lock()
@@ -612,6 +652,10 @@ impl MockBiliServer {
 
     pub fn clear_all_faults(&self) {
         self.faults
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        self.transient_faults
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
@@ -927,20 +971,43 @@ fn read_http_request(stream: &mut TcpStream) -> std::io::Result<Option<RecordedR
     }))
 }
 
-fn find_fault(faults: &HashMap<String, FaultConfig>, path: &str) -> Option<FaultConfig> {
-    if let Some(exact) = faults.get(path) {
-        return Some(exact.clone());
+/// 待生效的一次性故障：跳过 `skip` 次命中后返回一次 `fault`，随后自动移除
+#[derive(Debug, Clone)]
+struct PendingFault {
+    fault: FaultConfig,
+    skip: usize,
+}
+
+/// 命中给定路径的故障键：精确匹配优先，其次是最长的 `前缀*` 模式
+fn matched_fault_route<V>(faults: &HashMap<String, V>, path: &str) -> Option<String> {
+    if faults.contains_key(path) {
+        return Some(path.to_string());
     }
-    let mut best: Option<(&str, &FaultConfig)> = None;
-    for (pattern, cfg) in faults {
+    let mut best: Option<&str> = None;
+    for pattern in faults.keys() {
         if let Some(prefix) = pattern.strip_suffix('*')
             && path.starts_with(prefix)
-            && best.is_none_or(|(best_p, _)| prefix.len() > best_p.len())
+            && best.is_none_or(|best_prefix| prefix.len() > best_prefix.len())
         {
-            best = Some((prefix, cfg));
+            best = Some(prefix);
         }
     }
-    best.map(|(_, cfg)| cfg.clone())
+    best.map(|prefix| format!("{prefix}*"))
+}
+
+fn find_fault(faults: &HashMap<String, FaultConfig>, path: &str) -> Option<FaultConfig> {
+    matched_fault_route(faults, path).and_then(|key| faults.get(&key).cloned())
+}
+
+/// 取出本次命中应当返回的一次性故障；尚在跳过期的条目只递减计数
+fn take_pending_fault(faults: &mut HashMap<String, PendingFault>, path: &str) -> Option<FaultConfig> {
+    let key = matched_fault_route(faults, path)?;
+    let pending = faults.get_mut(&key)?;
+    if pending.skip > 0 {
+        pending.skip -= 1;
+        return None;
+    }
+    faults.remove(&key).map(|pending| pending.fault)
 }
 
 fn apply_fault(fault: FaultConfig) -> HttpResponse {
@@ -1093,7 +1160,15 @@ fn dispatch(
     req: &RecordedRequest,
     state_lock: &Arc<Mutex<MockState>>,
     faults_lock: &Arc<Mutex<HashMap<String, FaultConfig>>>,
+    transient_lock: &Arc<Mutex<HashMap<String, PendingFault>>>,
 ) -> HttpResponse {
+    // 一次性故障优先：命中即移除，后续同一路径恢复正常响应
+    if let Some(fault) = take_pending_fault(
+        &mut transient_lock.lock().unwrap_or_else(|e| e.into_inner()),
+        &req.path,
+    ) {
+        return apply_fault(fault);
+    }
     if let Some(fault) = find_fault(&faults_lock.lock().unwrap_or_else(|e| e.into_inner()), &req.path)
     {
         return apply_fault(fault);
@@ -1437,6 +1512,177 @@ fn dispatch(
                 }]
             }
         })),
+
+        // ── Bilibili subtitle track management (dm/subtitle) ────────────────
+        ("POST", "/x/v2/dm/subtitle/draft/save") => {
+            if !st.auth_logged_in {
+                return unauth_response();
+            }
+            if req.form_param("csrf") != Some(st.bili_jct.as_str())
+                || req.form_param("csrf_token") != Some(st.bili_jct.as_str())
+            {
+                return HttpResponse::json(json!({
+                    "code": -111,
+                    "message": "csrf 校验失败",
+                    "ttl": 1
+                }));
+            }
+
+            let oid = req
+                .form_param("oid")
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(0);
+            let bvid = req.form_param("bvid").unwrap_or("").to_string();
+            let lan = req.form_param("lan").unwrap_or("").to_string();
+            let submit = req.form_param("submit").unwrap_or("0");
+            let data_raw = req.form_param("data").unwrap_or("");
+            let data = serde_json::from_str::<Value>(data_raw).ok();
+
+            if oid <= 0
+                || bvid.is_empty()
+                || lan.is_empty()
+                || submit.is_empty()
+                || !data.as_ref().is_some_and(|d| d["body"].is_array())
+            {
+                return HttpResponse::json(json!({
+                    "code": 79008,
+                    "message": "字幕不合法",
+                    "ttl": 1
+                }));
+            }
+            let data = data.unwrap();
+
+            let id = st.next_subtitle_id;
+            st.next_subtitle_id += 1;
+            let status = if submit == "1" { 5 } else { 1 };
+            let mtime = 1795700000 + st.subtitles.len() as i64;
+            st.subtitles.push(MockSubtitle {
+                id_str: id.to_string(),
+                oid,
+                bvid,
+                lan,
+                status,
+                mtime,
+                data,
+            });
+
+            HttpResponse::json(json!({
+                "code": 0,
+                "message": "0",
+                "ttl": 1,
+                "data": { "subtitle_id": id.to_string() }
+            }))
+        }
+
+        ("GET", "/x/v2/dm/subtitle/search/author/list") => {
+            if !st.auth_logged_in {
+                return unauth_response();
+            }
+            let page = req
+                .query_param("page")
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(1)
+                .max(1);
+            let size = req
+                .query_param("size")
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(20)
+                .clamp(1, 50);
+            let status_filter = req
+                .query_param("status")
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(0);
+
+            let mut items: Vec<&MockSubtitle> = st
+                .subtitles
+                .iter()
+                .filter(|s| status_filter == 0 || s.status == status_filter)
+                .collect();
+            items.sort_by_key(|s| std::cmp::Reverse(s.mtime));
+
+            let total = items.len() as i64;
+            let start = ((page - 1) * size) as usize;
+            let subtitles: Vec<Value> = items
+                .iter()
+                .skip(start)
+                .take(size as usize)
+                .map(|s| {
+                    json!({
+                        "id": s.id_str.parse::<i64>().unwrap_or(0),
+                        "id_str": s.id_str,
+                        "oid": s.oid,
+                        "aid": 79677524,
+                        "bvid": s.bvid,
+                        "type": 1,
+                        "archive_name": format!("Mock Video {}", s.bvid),
+                        "video_name": format!("Mock Video {} 分P视频", s.bvid),
+                        "lan": s.lan,
+                        "lan_doc": match s.lan.as_str() {
+                            "zh" => "中文",
+                            "en" => "英语",
+                            _ => "其他",
+                        },
+                        "status": s.status,
+                        "is_sign": false,
+                        "is_lock": false,
+                        "mtime": s.mtime
+                    })
+                })
+                .collect();
+
+            let publish_count = st.subtitles.iter().filter(|s| s.status == 5).count() as i64;
+            let draft_count = st.subtitles.iter().filter(|s| s.status == 1).count() as i64;
+            HttpResponse::json(json!({
+                "code": 0,
+                "message": "OK",
+                "ttl": 1,
+                "data": {
+                    "page": { "num": page, "size": size, "total": total },
+                    "subtitles": subtitles,
+                    "total": total,
+                    "draft_count": draft_count,
+                    "audit_count": 0,
+                    "back_count": 0,
+                    "publish_count": publish_count
+                }
+            }))
+        }
+
+        ("POST", "/x/v2/dm/subtitle/del") => {
+            if !st.auth_logged_in {
+                return unauth_response();
+            }
+            if req.form_param("csrf") != Some(st.bili_jct.as_str())
+                || req.form_param("csrf_token") != Some(st.bili_jct.as_str())
+            {
+                return HttpResponse::json(json!({
+                    "code": -111,
+                    "message": "csrf 校验失败",
+                    "ttl": 1
+                }));
+            }
+            let oid = req
+                .form_param("oid")
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(0);
+            let subtitle_id = req.form_param("subtitle_id").unwrap_or("");
+
+            match st
+                .subtitles
+                .iter_mut()
+                .find(|s| s.id_str == subtitle_id && s.oid == oid)
+            {
+                Some(entry) => {
+                    entry.status = 4;
+                    HttpResponse::json(json!({ "code": 0, "message": "0", "ttl": 1 }))
+                }
+                None => HttpResponse::json(json!({
+                    "code": -400,
+                    "message": "请求错误",
+                    "ttl": 1
+                })),
+            }
+        }
 
         ("GET", "/x/web-interface/view/conclusion/get") => HttpResponse::json(json!({
             "code": 0,

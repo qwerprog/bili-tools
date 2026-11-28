@@ -13,7 +13,7 @@ use crate::{user_info, user_success, user_warning};
 use crossterm::style::Color;
 use serde_json::{Value, json};
 use std::collections::HashSet;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 const MAX_EXPLICIT_PAGE_SPAN: u32 = 10_000;
@@ -182,6 +182,19 @@ fn write_stdout_broken_pipe_safe(content: &str) -> Result<()> {
     }
     Ok(())
 }
+
+/// 上传后回查 `author/list` 的最长等待时间。默认 90 秒（实测新条目约 40 秒才可见）；
+/// 仅测试通过 `BT_SUBTITLE_VERIFY_TIMEOUT_SECS` 覆盖，避免失败用例白等。
+fn subtitle_verify_timeout_secs() -> u64 {
+    std::env::var("BT_SUBTITLE_VERIFY_TIMEOUT_SECS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(90)
+}
+
+/// 回查轮询每轮请求的条数。列表按 `mtime` 倒序，新版本必然在第 1 页内，
+/// 因此只查第 1 页，条数取接口上限 50 即可。
+const SUBTITLE_VERIFY_PAGE_SIZE: u32 = 50;
 
 fn select_subtitle_track<'a>(tracks: &'a [Value], lang: Option<&str>) -> Result<&'a Value> {
     if tracks.is_empty() {
@@ -704,6 +717,604 @@ pub fn handle_video(cmd: VideoCommands) -> Result<()> {
                 }
             } else {
                 write_stdout_broken_pipe_safe(&content)?;
+            }
+        }
+
+        VideoCommands::SubtitleUpload {
+            video,
+            file,
+            lang,
+            page,
+            draft,
+            sign,
+            no_verify,
+            dry_run,
+        } => {
+            // 语言码优先归一化：非法值必须在任何网络请求之前失败
+            let lang_input = lang.clone();
+            let normalized_lang = crate::api::subtitle::normalize_lan(&lang)?;
+
+            let is_srt = file
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("srt"));
+            if !is_srt {
+                return Err(BiliLiveError::Input(format!(
+                    "当前仅支持 .srt 字幕文件: {}",
+                    file.display()
+                )));
+            }
+            let text = std::fs::read_to_string(&file).map_err(BiliLiveError::Io)?;
+            let (bcc, stats) = crate::api::subtitle::srt_to_bcc(&text)?;
+            let entries = bcc.body.len();
+            let first_from = bcc.body.first().map(|cue| cue.from).unwrap_or(0.0);
+            let last_to = bcc.body.last().map(|cue| cue.to).unwrap_or(0.0);
+
+            if dry_run {
+                // 离线验收路径：只做解析与转换，不发起任何请求，也不要求登录
+                let parsed = crate::utils::id::parse_input(&video, true)?;
+                let (bvid, aid, url_page) = match parsed.kind {
+                    crate::utils::id::IdKind::Video => {
+                        (parsed.bvid.clone(), parsed.aid, parsed.page)
+                    }
+                    crate::utils::id::IdKind::Numeric => {
+                        (None, parsed.id.parse::<i64>().ok(), None)
+                    }
+                    crate::utils::id::IdKind::ShortLink => {
+                        return Err(BiliLiveError::Input(
+                            "--dry-run 不联网，无法解析 b23.tv 短链接；请改用 BV 号或完整视频 URL"
+                                .to_string(),
+                        ));
+                    }
+                    _ => {
+                        return Err(BiliLiveError::Input(format!(
+                            "字幕上传仅支持普通投稿视频，不接受番剧/直播等标识: {video}"
+                        )));
+                    }
+                };
+                let page_num = page.or(url_page).unwrap_or(1);
+
+                if is_json() {
+                    print_json(&json!({
+                        "dry_run": true,
+                        "bvid": bvid,
+                        "aid": aid,
+                        "cid": Value::Null,
+                        "page": page_num,
+                        "lang": normalized_lang,
+                        "lang_input": lang_input,
+                        "submit": !draft,
+                        "draft": draft,
+                        "sign": sign,
+                        "entries": entries,
+                        "parsed": stats.parsed,
+                        "kept": stats.kept,
+                        "skipped": stats.skipped,
+                        "first_from": first_from,
+                        "last_to": last_to,
+                        "bcc": bcc,
+                    }))?;
+                } else {
+                    user_success!("SRT→BCC 转换完成（--dry-run 不联网、不提交）");
+                    user_info!(
+                        "条目: 解析 {} / 保留 {} / 丢弃 {}",
+                        stats.parsed,
+                        stats.kept,
+                        stats.skipped
+                    );
+                    user_info!("时间轴: {:.2}s .. {:.2}s", first_from, last_to);
+                    user_info!(
+                        "目标: bvid={} page=P{} lang={}（输入 {}）",
+                        bvid.as_deref().unwrap_or("-"),
+                        page_num,
+                        normalized_lang,
+                        lang_input
+                    );
+                    user_info!("正式提交时会联网解析该分P的 cid 并上传；dry-run 不校验稿件是否存在");
+                    write_stdout_broken_pipe_safe(&serde_json::to_string(&bcc)?)?;
+                }
+                return Ok(());
+            }
+
+            let cookies = crate::auth::ensure_csrf()?;
+            let (target_page, info) =
+                crate::api::video::resolve_video_context(&video, Some(&cookies))?;
+            if info["is_pgc"].as_bool() == Some(true) {
+                return Err(BiliLiveError::Input(
+                    "字幕上传仅支持普通投稿视频稿件，番剧/影视稿件暂不支持".to_string(),
+                ));
+            }
+            let page_num = page.or(target_page).unwrap_or(1);
+            let resolved = crate::api::video::extract_page_info(&info, page_num)?;
+
+            // draft/save 的响应体不可信：先记录已有版本 ID，提交后回查 author/list 确认新版本真的落库。
+            // `--no-verify` 供大批量上传使用：跳过回查（每条会扫描全账号字幕列表），由调用方统一复核。
+            let before_ids: HashSet<String> = if no_verify {
+                HashSet::new()
+            } else {
+                let (before, _) = crate::api::subtitle::list_all_subtitles(&cookies, 50)?;
+                before
+                    .iter()
+                    .filter_map(|item| item["id_str"].as_str())
+                    .map(str::to_string)
+                    .collect()
+            };
+
+            let response = crate::api::subtitle::submit_subtitle(
+                &cookies,
+                resolved.cid,
+                &resolved.bvid,
+                &normalized_lang,
+                &bcc,
+                !draft,
+                sign,
+            )?;
+
+            let verified: Option<Value> = if no_verify {
+                if !is_json() {
+                    user_warning!(
+                        "已按 --no-verify 跳过字幕列表回查；请稍后用 `bit video subtitle-list` 复核是否落库"
+                    );
+                }
+                None
+            } else {
+                // author/list 是搜索索引，新建字幕通常要几十秒才可见（实测约 40 秒），
+                // 所以这里做有上限的轮询，既不能立即误报失败，也不能无限等待。
+                // 列表按 mtime 倒序返回，新版本必然排在首页，因此每轮只查第 1 页：
+                // 账号字幕较多时，全量翻页的轮询会把请求量放大一个数量级。
+                let verify_timeout = subtitle_verify_timeout_secs();
+                let poll_interval = std::time::Duration::from_secs(3);
+                let deadline =
+                    std::time::Instant::now() + std::time::Duration::from_secs(verify_timeout);
+                if !is_json() {
+                    user_info!(
+                        "正在回查字幕列表确认新版本已落库（服务端索引通常有几十秒延迟，最多等待 {} 秒）",
+                        verify_timeout
+                    );
+                }
+                let mut verified: Option<Value> = None;
+                let mut last_error: Option<BiliLiveError> = None;
+                let mut polls = 0usize;
+                loop {
+                    // 用真实时间窗口而非「次数 × 间隔」控制超时：单次请求耗时也算在预算内
+                    if std::time::Instant::now() >= deadline {
+                        break;
+                    }
+                    match crate::api::subtitle::list_my_subtitles(
+                        &cookies,
+                        1,
+                        SUBTITLE_VERIFY_PAGE_SIZE,
+                        None,
+                    ) {
+                        Ok(data) => {
+                            polls += 1;
+                            verified = data["subtitles"]
+                                .as_array()
+                                .map(|v| v.as_slice())
+                                .unwrap_or(&[])
+                                .iter()
+                                .find(|item| {
+                                    item["oid"].as_i64() == Some(resolved.cid)
+                                        && item["lan"].as_str() == Some(normalized_lang.as_str())
+                                        && item["id_str"]
+                                            .as_str()
+                                            .is_some_and(|id| !before_ids.contains(id))
+                                })
+                                .cloned();
+                            if verified.is_some() {
+                                break;
+                            }
+                        }
+                        // 轮询期间的瞬时网络/接口抖动不该让整次上传失败：记录最近一次错误后继续轮询
+                        Err(err) => last_error = Some(err),
+                    }
+                    crate::utils::interrupt::sleep_interruptible(poll_interval)?;
+                }
+                let Some(verified) = verified else {
+                    // 全程一次都没查成功时直接暴露底层错误，不把网络问题伪装成「没落库」
+                    if polls == 0
+                        && let Some(err) = last_error
+                    {
+                        return Err(err);
+                    }
+                    let mut message = format!(
+                        "提交接口返回成功，但 {timeout} 秒内未在字幕列表中确认到 {bvid} P{page}（cid={cid}, lan={lan}）的新条目；\
+                         为避免误报成功，本次结果按失败处理，请用 `bit video subtitle-list {bvid} -p {page}` 复核",
+                        timeout = verify_timeout,
+                        bvid = resolved.bvid,
+                        page = resolved.page,
+                        cid = resolved.cid,
+                        lan = normalized_lang,
+                    );
+                    if let Some(err) = last_error {
+                        message.push_str(&format!("；轮询期间最近一次查询错误：{err}"));
+                    }
+                    return Err(BiliLiveError::Api(message));
+                };
+                Some(verified)
+            };
+            let verified_id = verified
+                .as_ref()
+                .and_then(|v| v["id_str"].as_str())
+                .unwrap_or("")
+                .to_string();
+            let verified_status = verified
+                .as_ref()
+                .and_then(|v| v["status"].as_i64())
+                .unwrap_or(0);
+            let verified_ok = verified.is_some();
+
+            if is_json() {
+                print_json(&json!({
+                    "dry_run": false,
+                    "bvid": resolved.bvid,
+                    "aid": resolved.aid,
+                    "cid": resolved.cid,
+                    "page": resolved.page,
+                    "part": resolved.part,
+                    "lang": normalized_lang,
+                    "lang_input": lang_input,
+                    "submit": !draft,
+                    "draft": draft,
+                    "sign": sign,
+                    "entries": entries,
+                    "parsed": stats.parsed,
+                    "kept": stats.kept,
+                    "skipped": stats.skipped,
+                    "first_from": first_from,
+                    "last_to": last_to,
+                    "verified": verified_ok,
+                    "verified_id": if verified_ok { Value::String(verified_id.clone()) } else { Value::Null },
+                    "verified_status": if verified_ok { json!(verified_status) } else { Value::Null },
+                    "verified_status_text": if verified_ok {
+                        Value::String(crate::api::subtitle::status_text(verified_status).to_string())
+                    } else {
+                        Value::Null
+                    },
+                    "response": response,
+                }))?;
+            } else {
+                if draft {
+                    user_success!(
+                        "字幕草稿已保存 (bvid={}, P{} cid={}, {} 条, 语言 {})",
+                        resolved.bvid,
+                        resolved.page,
+                        resolved.cid,
+                        entries,
+                        normalized_lang
+                    );
+                } else {
+                    user_success!(
+                        "字幕已提交审核 (bvid={}, P{} cid={}, {} 条, 语言 {})",
+                        resolved.bvid,
+                        resolved.page,
+                        resolved.cid,
+                        entries,
+                        normalized_lang
+                    );
+                }
+                user_info!(
+                    "条目: 解析 {} / 保留 {} / 丢弃 {}，时间轴 {:.2}s .. {:.2}s",
+                    stats.parsed,
+                    stats.kept,
+                    stats.skipped,
+                    first_from,
+                    last_to
+                );
+                if verified_ok {
+                    user_info!(
+                        "语言: 输入 {} → 归一化为 {}；新版本 ID {}（当前状态：{}）",
+                        lang_input,
+                        normalized_lang,
+                        verified_id,
+                        crate::api::subtitle::status_text(verified_status)
+                    );
+                } else {
+                    user_info!(
+                        "语言: 输入 {} → 归一化为 {}；已跳过回查，落库状态未知",
+                        lang_input,
+                        normalized_lang
+                    );
+                }
+                user_info!("这是新增一个版本，同一分P同语言的旧版本仍保留在字幕列表中");
+                user_info!("审核通常需要几分钟：登录态可立即看到；匿名播放器要等审核通过后才出现，暂时看不到不是失败");
+            }
+        }
+
+        VideoCommands::SubtitleList {
+            video,
+            page,
+            status,
+            page_num,
+            page_size,
+        } => {
+            let cookies = crate::auth::ensure_login()?;
+
+            let (scope, cid, bvid, items, matched_total, account_total) = match video {
+                Some(video) => {
+                    let (target_page, info) =
+                        crate::api::video::resolve_video_context(&video, Some(&cookies))?;
+                    let page_num = page.or(target_page).unwrap_or(1);
+                    let resolved = crate::api::video::extract_page_info(&info, page_num)?;
+
+                    let (all, account_total) =
+                        crate::api::subtitle::list_all_subtitles(&cookies, page_size)?;
+                    let matched: Vec<Value> = all
+                        .iter()
+                        .filter(|item| item["oid"].as_i64() == Some(resolved.cid))
+                        .filter(|item| {
+                            status.matches(item["status"].as_i64().unwrap_or(0))
+                        })
+                        .cloned()
+                        .collect();
+                    let matched_total = matched.len() as i64;
+                    (
+                        "page",
+                        Some(resolved.cid),
+                        Some(resolved.bvid),
+                        matched,
+                        matched_total,
+                        account_total,
+                    )
+                }
+                None => {
+                    // 账号范围：先翻完所有分页再按状态过滤，最后在过滤结果上分页。
+                    // 只取 `--list-page` 指定的一页再本地过滤，会漏掉后续分页里的草稿/已删除记录，
+                    // 查询结果因此不完整；这里用「按需翻页过滤」保证结果集完整。
+                    let (all, account_total) =
+                        crate::api::subtitle::list_all_subtitles(&cookies, page_size)?;
+                    let matched: Vec<Value> = all
+                        .iter()
+                        .filter(|item| status.matches(item["status"].as_i64().unwrap_or(0)))
+                        .cloned()
+                        .collect();
+                    let matched_total = matched.len() as i64;
+                    let offset = (page_num.saturating_sub(1) as usize) * page_size as usize;
+                    let page_items: Vec<Value> = matched
+                        .into_iter()
+                        .skip(offset)
+                        .take(page_size as usize)
+                        .collect();
+                    (
+                        "account",
+                        None,
+                        None,
+                        page_items,
+                        matched_total,
+                        account_total,
+                    )
+                }
+            };
+
+            let subtitles: Vec<Value> = items
+                .iter()
+                .map(|item| {
+                    let item_status = item["status"].as_i64().unwrap_or(0);
+                    json!({
+                        "id_str": item["id_str"],
+                        "oid": item["oid"],
+                        "lan": item["lan"],
+                        "lan_doc": item["lan_doc"],
+                        "status": item_status,
+                        "status_text": crate::api::subtitle::status_text(item_status),
+                        "mtime": item["mtime"],
+                        "bvid": item["bvid"],
+                        "archive_name": item["archive_name"],
+                        "video_name": item["video_name"],
+                    })
+                })
+                .collect();
+
+            if is_json() {
+                print_json(&json!({
+                    "scope": scope,
+                    "cid": cid,
+                    "bvid": bvid,
+                    "total": subtitles.len(),
+                    "matched_total": matched_total,
+                    "account_total": account_total,
+                    "subtitles": subtitles,
+                }))?;
+                return Ok(());
+            }
+
+            if subtitles.is_empty() {
+                user_info!("未查询到符合条件的字幕");
+                return Ok(());
+            }
+
+            let subtitle_label = match scope {
+                "page" => format!(
+                    "分P cid={}",
+                    cid.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string())
+                ),
+                _ => format!("全账号 · 第 {page_num} 页"),
+            };
+            print_spacer();
+            print_section_header(
+                "字幕列表",
+                Some(&format!("{subtitle_label} · {} 条", subtitles.len())),
+            );
+            let columns = [
+                Column::left("字幕ID", 19),
+                Column::left("语言", 12),
+                Column::left("状态", 8),
+                Column::left("更新时间", 19),
+                Column::left("稿件 / 分P视频", 36),
+            ];
+            let rows: Vec<Vec<Cell>> = items
+                .iter()
+                .map(|item| {
+                    let item_status = item["status"].as_i64().unwrap_or(0);
+                    let lan = item["lan"].as_str().unwrap_or("-");
+                    let lan_doc = item["lan_doc"].as_str().unwrap_or(lan);
+                    let id = item["id_str"].as_str().unwrap_or("-");
+                    let mtime = item["mtime"].as_i64().unwrap_or(0);
+                    let title = item["archive_name"]
+                        .as_str()
+                        .filter(|s| !s.is_empty())
+                        .or_else(|| item["video_name"].as_str())
+                        .unwrap_or("-");
+                    let status_cell = match item_status {
+                        5 => Cell::pink(crate::api::subtitle::status_text(item_status)),
+                        1 => Cell::cyan(crate::api::subtitle::status_text(item_status)),
+                        _ => Cell::muted(crate::api::subtitle::status_text(item_status)),
+                    };
+                    vec![
+                        Cell::plain(id),
+                        Cell::plain(format!("{lan} ({lan_doc})")),
+                        status_cell,
+                        Cell::muted(format_timestamp(mtime)),
+                        Cell::muted(truncate_to_width(title, 36)),
+                    ]
+                })
+                .collect();
+            print_table(&columns, &rows);
+            print_spacer();
+            if scope == "page" {
+                user_info!(
+                    "账号字幕总数 {}；同一 (分P, 语言) 的多条记录是不同版本，删除只是软删除（status=4）",
+                    account_total
+                );
+            } else {
+                user_info!(
+                    "账号字幕总数 {}；当前过滤条件匹配 {} 条，本页显示 {} 条",
+                    account_total,
+                    matched_total,
+                    subtitles.len()
+                );
+                user_info!("同一 (分P, 语言) 的多条记录是不同版本，删除只是软删除（status=4）");
+            }
+        }
+
+        VideoCommands::SubtitleDelete { video, ids, page } => {
+            // 非交互模式必须在任何网络请求之前完成确认：--json 或非 TTY 下必须显式 -y
+            let stdin_is_tty = std::io::stdin().is_terminal();
+            if is_json() || !stdin_is_tty {
+                crate::cli::output::confirm_action_with_tty(
+                    "确认删除这些字幕？(软删除，status 将变为 4)",
+                    stdin_is_tty,
+                )?;
+            }
+
+            let mut requested: Vec<String> = Vec::new();
+            for id in &ids {
+                let trimmed = id.trim();
+                if trimmed.is_empty() {
+                    return Err(BiliLiveError::Input("字幕 ID 不能为空".to_string()));
+                }
+                if !requested.iter().any(|existing| existing == trimmed) {
+                    requested.push(trimmed.to_string());
+                }
+            }
+
+            let cookies = crate::auth::ensure_csrf()?;
+            let (target_page, info) =
+                crate::api::video::resolve_video_context(&video, Some(&cookies))?;
+            if info["is_pgc"].as_bool() == Some(true) {
+                return Err(BiliLiveError::Input(
+                    "字幕删除仅支持普通投稿视频稿件，番剧/影视稿件暂不支持".to_string(),
+                ));
+            }
+            let page_num = page.or(target_page).unwrap_or(1);
+            let resolved = crate::api::video::extract_page_info(&info, page_num)?;
+
+            let (all, _) = crate::api::subtitle::list_all_subtitles(&cookies, 50)?;
+            let page_entries: Vec<&Value> = all
+                .iter()
+                .filter(|item| item["oid"].as_i64() == Some(resolved.cid))
+                .collect();
+
+            let mut targets: Vec<&Value> = Vec::new();
+            for id in &requested {
+                let Some(entry) = page_entries
+                    .iter()
+                    .find(|item| item["id_str"].as_str() == Some(id.as_str()))
+                else {
+                    return Err(BiliLiveError::Input(format!(
+                        "字幕 {id} 不属于 {} P{}（cid={}），未执行任何删除",
+                        resolved.bvid, resolved.page, resolved.cid
+                    )));
+                };
+                targets.push(entry);
+            }
+
+            if !is_json() && !crate::cli::output::is_yes() {
+                print_spacer();
+                print_section_header(
+                    "即将删除的字幕",
+                    Some(&format!(
+                        "{} P{} · cid={}",
+                        resolved.bvid, resolved.page, resolved.cid
+                    )),
+                );
+                let columns = [
+                    Column::left("字幕ID", 19),
+                    Column::left("语言", 12),
+                    Column::left("状态", 8),
+                ];
+                let rows: Vec<Vec<Cell>> = targets
+                    .iter()
+                    .map(|item| {
+                        let item_status = item["status"].as_i64().unwrap_or(0);
+                        let lan = item["lan"].as_str().unwrap_or("-");
+                        let lan_doc = item["lan_doc"].as_str().unwrap_or(lan);
+                        vec![
+                            Cell::plain(item["id_str"].as_str().unwrap_or("-")),
+                            Cell::plain(format!("{lan} ({lan_doc})")),
+                            Cell::muted(crate::api::subtitle::status_text(item_status)),
+                        ]
+                    })
+                    .collect();
+                print_table(&columns, &rows);
+                print_spacer();
+                let confirmed = crate::cli::output::confirm_action(&format!(
+                    "确认删除以上 {} 条字幕？（软删除，status 将变为 4）",
+                    targets.len()
+                ))?;
+                if !confirmed {
+                    user_warning!("已取消删除");
+                    return Ok(());
+                }
+            }
+
+            let mut deleted: Vec<String> = Vec::new();
+            for (idx, id) in requested.iter().enumerate() {
+                // 连发会被服务端静默吞掉，逐个删除之间至少间隔 1 秒。
+                // 用可中断睡眠：Ctrl+C 时立刻返回 Interrupted 而不是等满 1 秒。
+                if idx > 0 {
+                    crate::utils::interrupt::sleep_interruptible(
+                        std::time::Duration::from_millis(1000),
+                    )?;
+                }
+                crate::api::subtitle::delete_subtitle(&cookies, resolved.cid, id)?;
+                deleted.push(id.clone());
+            }
+
+            if is_json() {
+                print_json(&json!({
+                    "cid": resolved.cid,
+                    "bvid": resolved.bvid,
+                    "page": resolved.page,
+                    "deleted": deleted,
+                    "soft_delete": true,
+                }))?;
+            } else {
+                user_success!(
+                    "已删除 {} 条字幕 (bvid={}, P{}, cid={})",
+                    deleted.len(),
+                    resolved.bvid,
+                    resolved.page,
+                    resolved.cid
+                );
+                user_warning!(
+                    "这是软删除：条目 status 先变为 4，短时间内仍会出现在 `subtitle-list` 中，之后由服务端从列表移除"
+                );
+                user_info!(
+                    "可用 `bit video subtitle-list {} -p {} --status deleted` 在删除后的一段时间内复核",
+                    resolved.bvid,
+                    resolved.page
+                );
             }
         }
 

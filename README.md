@@ -130,6 +130,11 @@ bit video append <BVID> b.mp4               # 向已有稿件追加分 P
 bit video replace <BVID> new.mp4 -t "新标题" # 替换稿件视频文件（保留 BV 号，可同时改标题，需重新审核）
 bit video studio ls                         # 查看创作中心个人稿件列表
 
+# 字幕轨管理（SRT 自动转 BCC；同一个分P+语言上传多次会生成多个版本）
+bit video subtitle-upload BV1hp4y1k7SV sub.zh.srt --lang zh  # 提交字幕（--draft 存草稿，--dry-run 只离线转换，--no-verify 跳过回查）
+bit video subtitle-list BV1hp4y1k7SV -p 1                    # 查看分P字幕轨（省略 VIDEO 查看账号全部字幕）
+bit video subtitle-delete BV1hp4y1k7SV --id <SUBTITLE_ID> -y # 删除字幕轨（软删除，条目 status 变为 4）
+
 # 用户主页、动态与榜单
 bit user info https://space.bilibili.com/293793435
 bit user videos 293793435 --order click --page-size 10
@@ -177,7 +182,7 @@ Commands:
   auth         账号与认证管理 (login, status, logout, refresh, daily)
   live         直播间管理、拉流、聊天与录制 (start, stop, status, info, title, area, following, stream, danmaku, chat, send, record)
   search       内容与用户搜索 (video, user, live, hot)
-  video        视频操作、下载与投稿 (info, streams, subtitle, summary, tags, related, danmaku, comments, comment, like, coin, triple, download, upload, append, replace, studio)
+  video        视频操作、下载与投稿 (info, streams, subtitle, subtitle-upload, subtitle-list, subtitle-delete, summary, tags, related, danmaku, comments, comment, like, coin, triple, download, upload, append, replace, studio)
   user         用户主页、投稿与关系管理 (info, videos, dynamics, follow, unfollow)
   feed         查看已关注 UP 主动态流
   rank         全站视频排行榜与综合热门 (video, popular)
@@ -301,7 +306,7 @@ flowchart TD
         end
         subgraph ROW2 ["检索与内容"]
             direction LR
-            c_video["bit video<br/>(详情/流/字幕/总结/弹幕/评论/下载)"]
+            c_video["bit video<br/>(详情/流/字幕/字幕轨/总结/弹幕/评论/下载/投稿)"]
             c_search["bit search / rank / resolve<br/>(综合搜索/全站榜单/短链解析)"]
         end
         subgraph ROW3 ["用户与数据"]
@@ -322,7 +327,7 @@ flowchart TD
             direction LR
             a_passport["passport"]
             a_live["live"]
-            a_video["video / danmaku / comment"]
+            a_video["video / subtitle / danmaku / comment"]
             a_user["user / search / fav / history"]
         end
         subgraph API_NET ["底层网络与安全"]
@@ -377,6 +382,7 @@ src/
 │   ├── live.rs           # 直播状态、开下播、分区、拉流、弹幕
 │   ├── search.rs         # 综合/视频/用户/直播搜索与热搜
 │   ├── video.rs          # 视频详情、流、字幕、AI 总结、标签、推荐、互动
+│   ├── subtitle.rs       # 字幕轨上传/查询/删除、SRT→BCC 转换与语言码归一化
 │   ├── danmaku.rs        # 视频弹幕 XML 获取、解压与 ASS/TXT/JSON 导出
 │   ├── comment.rs        # 评论列表、热评、发表、点赞与删除
 │   ├── user.rs           # 用户信息、投稿搜索、空间动态、关注动态与关系修改

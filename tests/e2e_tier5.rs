@@ -1362,6 +1362,299 @@ fn t5_c2_09_subtitle_need_login_lang_prefix_txt_json_and_empty_url() {
         .assert_json_err(Some("Api"));
 }
 
+// ── 9b. Subtitle Upload / List / Delete (dm/subtitle) ────────────────────────
+
+const SUBTITLE_SRT: &str = "1\n00:00:01,000 --> 00:00:02,500\n第一行\n<i>第二行</i>\n\n2\n00:00:02,000 --> 00:00:03,000\n重叠条目\n";
+
+fn subtitle_srt_path(env: &TestEnv) -> PathBuf {
+    env.write_work_file("upload.zh.srt", SUBTITLE_SRT.as_bytes())
+}
+
+#[test]
+fn t5_c3_01_subtitle_upload_requires_auth_and_dry_run_is_fully_offline() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server);
+    let srt = subtitle_srt_path(&env);
+    let srt_arg = srt.to_str().unwrap();
+
+    // 未登录 -> Auth，且不产生任何请求
+    env.run_bt(&[
+        "--json",
+        "video",
+        "subtitle-upload",
+        "BV1uJ411r7hL",
+        srt_arg,
+        "--lang",
+        "zh",
+    ])
+    .assert_json_err(Some("Auth"));
+    assert!(server.requests().is_empty());
+
+    // --dry-run：不登录、不联网，只做转换
+    server.reset_requests();
+    let dry = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt_arg,
+            "--lang",
+            "zh-Hans",
+            "--dry-run",
+        ])
+        .assert_json_ok();
+    assert_eq!(dry["dry_run"], true);
+    assert_eq!(dry["lang"], "zh");
+    assert_eq!(dry["lang_input"], "zh-Hans");
+    assert_eq!(dry["entries"], 2);
+    assert_eq!(dry["parsed"], 2);
+    assert_eq!(dry["kept"], 2);
+    assert_eq!(dry["skipped"], 0);
+    assert_eq!(dry["cid"], json!(null));
+    assert_eq!(dry["bcc"]["body"].as_array().unwrap().len(), 2);
+    assert_eq!(dry["bcc"]["Stroke"], "none");
+    assert!(server.requests().is_empty());
+}
+
+#[test]
+fn t5_c3_02_subtitle_upload_normalizes_lang_and_rejects_invalid_before_request() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+    let srt_arg = srt.to_str().unwrap();
+
+    // 白名单外的语言码在发请求之前就报 Input
+    server.reset_requests();
+    env.run_bt(&[
+        "--json",
+        "video",
+        "subtitle-upload",
+        "BV1uJ411r7hL",
+        srt_arg,
+        "--lang",
+        "xx",
+    ])
+    .assert_json_err(Some("Input"));
+    assert!(server.requests().is_empty());
+
+    // zh-Hans 归一化为 zh，请求体与返回体都按归一化后的值
+    let out = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt_arg,
+            "--lang",
+            "zh-Hans",
+        ])
+        .assert_json_ok();
+    assert_eq!(out["lang"], "zh");
+    assert_eq!(out["lang_input"], "zh-Hans");
+    assert_eq!(out["cid"], 146044693);
+    assert_eq!(out["page"], 1);
+    assert_eq!(out["verified"], true);
+    assert_eq!(out["verified_status"], 5);
+
+    let reqs = server.requests();
+    let upload = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.path == "/x/v2/dm/subtitle/draft/save")
+        .expect("missing draft/save request");
+    assert_eq!(upload.form_param("lan"), Some("zh"));
+    assert_eq!(upload.form_param("oid"), Some("146044693"));
+    assert_eq!(upload.form_param("bvid"), Some("BV1uJ411r7hL"));
+    assert_eq!(upload.form_param("submit"), Some("1"));
+    assert_eq!(upload.form_param("sign"), Some("0"));
+    assert_eq!(upload.form_param("csrf"), Some("mock_bili_jct_csrf"));
+    assert_eq!(upload.form_param("csrf_token"), Some("mock_bili_jct_csrf"));
+
+    let bcc: serde_json::Value =
+        serde_json::from_str(upload.form_param("data").expect("missing data")).unwrap();
+    assert_eq!(bcc["body"].as_array().unwrap().len(), 2);
+    assert_eq!(bcc["font_size"], 0.4);
+}
+
+#[test]
+fn t5_c3_03_subtitle_upload_is_monotonic_and_supports_draft() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+    let srt_arg = srt.to_str().unwrap();
+
+    let out = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt_arg,
+            "--lang",
+            "en",
+            "--draft",
+        ])
+        .assert_json_ok();
+    assert_eq!(out["draft"], true);
+    assert_eq!(out["submit"], false);
+    assert_eq!(out["verified_status"], 1);
+
+    let reqs = server.requests();
+    let upload = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.path == "/x/v2/dm/subtitle/draft/save")
+        .expect("missing draft/save request");
+    assert_eq!(upload.form_param("submit"), Some("0"));
+    let bcc: serde_json::Value =
+        serde_json::from_str(upload.form_param("data").expect("missing data")).unwrap();
+    let cues = bcc["body"].as_array().unwrap();
+    assert!(cues[1]["from"].as_f64().unwrap() >= cues[0]["to"].as_f64().unwrap());
+    assert_eq!(cues[1]["from"], 2.5);
+}
+
+#[test]
+fn t5_c3_04_subtitle_delete_requires_yes_and_shows_soft_deleted_entries() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+
+    let up = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt.to_str().unwrap(),
+            "--lang",
+            "zh",
+        ])
+        .assert_json_ok();
+    let id = up["verified_id"].as_str().unwrap().to_string();
+
+    // --json 且未传 -y -> Input，且不发出任何新请求
+    let before = server.requests().len();
+    env.run_bt(&[
+        "--json",
+        "video",
+        "subtitle-delete",
+        "BV1uJ411r7hL",
+        "--id",
+        &id,
+    ])
+    .assert_json_err(Some("Input"));
+    assert_eq!(server.requests().len(), before);
+
+    // -y 后执行软删除
+    let del = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-delete",
+            "BV1uJ411r7hL",
+            "--id",
+            &id,
+            "-y",
+        ])
+        .assert_json_ok();
+    assert_eq!(del["soft_delete"], true);
+    assert_eq!(del["cid"], 146044693);
+    assert_eq!(del["deleted"][0], id);
+
+    // 已删除状态可见，已发布状态不可见
+    let deleted = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-list",
+            "BV1uJ411r7hL",
+            "--status",
+            "deleted",
+        ])
+        .assert_json_ok();
+    assert_eq!(deleted["scope"], "page");
+    assert_eq!(deleted["cid"], 146044693);
+    assert!(
+        deleted["subtitles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["id_str"] == id.as_str())
+    );
+
+    let published = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-list",
+            "BV1uJ411r7hL",
+            "--status",
+            "published",
+        ])
+        .assert_json_ok();
+    assert!(
+        !published["subtitles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["id_str"] == id.as_str())
+    );
+
+    // 账号范围查询与人类可读输出
+    let account = env
+        .run_bt(&["--json", "video", "subtitle-list"])
+        .assert_json_ok();
+    assert_eq!(account["scope"], "account");
+    assert_eq!(account["cid"], json!(null));
+    assert_eq!(account["subtitles"].as_array().unwrap().len(), 1);
+    env.run_bt(&["video", "subtitle-list"])
+        .assert_exit(0)
+        .assert_stdout_contains("字幕列表");
+}
+
+#[test]
+fn t5_c3_05_subtitle_upload_reports_failure_when_author_list_has_no_new_entry() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+
+    // 接口返回 code=0 但实际没有落库：不能误报成功
+    server.set_fault(
+        "/x/v2/dm/subtitle/draft/save",
+        FaultConfig::json(json!({ "code": 0, "message": "0", "ttl": 1, "data": {} })),
+    );
+    let err = env
+        .run_bt_env(
+            &[
+                "--json",
+                "video",
+                "subtitle-upload",
+                "BV1uJ411r7hL",
+                srt.to_str().unwrap(),
+                "--lang",
+                "zh",
+            ],
+            // 只为让失败用例立即结束，避免等满默认 90 秒复核窗口
+            &[("BT_SUBTITLE_VERIFY_TIMEOUT_SECS", "0")],
+        )
+        .assert_json_err(Some("Api"));
+    assert!(
+        err["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("按失败处理")
+    );
+}
+
+#[test]
+fn t5_c3_06_subtitle_list_requires_login() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server);
+
+    env.run_bt(&["--json", "video", "subtitle-list"])
+        .assert_json_err(Some("Auth"));
+    assert!(server.requests().is_empty());
+}
+
 #[test]
 fn t5_c2_10_summary_tags_related_streams_human_and_null_edge_cases() {
     let server = MockBiliServer::start();
@@ -2265,4 +2558,202 @@ fn t5_c2_12_comments_clean_json_raw_readable_default_and_tui_guards() {
     assert!(compact_ws.contains("默认模式需要完整换行显示而不应该在三十六列处截断"));
     assert!(compact_ws.contains("同样完整展开不会截断的楼中楼热评回复"));
     assert!(human_out.stdout.contains("--root 9002"));
+}
+
+#[test]
+fn t5_c3_09_subtitle_upload_no_verify_skips_list_polling() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+
+    let out = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt.to_str().unwrap(),
+            "--lang",
+            "zh",
+            "--no-verify",
+        ])
+        .assert_json_ok();
+
+    assert_eq!(out["verified"], false);
+    assert!(out["verified_id"].is_null());
+    assert!(out["verified_status"].is_null());
+
+    let reqs = server.requests();
+    assert!(
+        reqs.iter()
+            .any(|r| r.method == "POST" && r.path == "/x/v2/dm/subtitle/draft/save"),
+        "submit should still be sent"
+    );
+    assert!(
+        !reqs
+            .iter()
+            .any(|r| r.path == "/x/v2/dm/subtitle/search/author/list"),
+        "--no-verify must not poll author/list"
+    );
+}
+
+#[test]
+fn t5_c3_10_subtitle_list_account_scope_keeps_matches_from_later_pages() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+
+    // 3 条记录：一条已发布、一条已删除、再一条已发布（mtime 倒序，删除那条在中间页）
+    let published = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt.to_str().unwrap(),
+            "--lang",
+            "en",
+            "--no-verify",
+        ])
+        .assert_json_ok();
+    assert_eq!(published["verified"], false);
+
+    let to_delete = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-upload",
+            "BV1uJ411r7hL",
+            srt.to_str().unwrap(),
+            "--lang",
+            "zh",
+            "--no-verify",
+        ])
+        .assert_json_ok();
+    assert_eq!(to_delete["verified"], false);
+
+    let listed = env
+        .run_bt(&["--json", "video", "subtitle-list"])
+        .assert_json_ok();
+    let ids: Vec<String> = listed["subtitles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["id_str"].as_str().unwrap().to_string())
+        .collect();
+
+    let deleted_id = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-delete",
+            "BV1uJ411r7hL",
+            "--id",
+            &ids[0],
+            "-y",
+        ])
+        .assert_json_ok()["deleted"][0]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    env.run_bt(&[
+        "--json",
+        "video",
+        "subtitle-upload",
+        "BV1uJ411r7hL",
+        srt.to_str().unwrap(),
+        "--lang",
+        "ja",
+        "--no-verify",
+    ])
+    .assert_json_ok();
+
+    // 每页只取 1 条：首页（最新）不是已删除记录，过滤必须翻到后续分页才能找到它
+    let deleted = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-list",
+            "--status",
+            "deleted",
+            "--page-size",
+            "1",
+        ])
+        .assert_json_ok();
+    assert_eq!(deleted["scope"], "account");
+    assert_eq!(deleted["matched_total"], 1);
+    assert_eq!(deleted["subtitles"].as_array().unwrap().len(), 1);
+    assert_eq!(deleted["subtitles"][0]["id_str"], deleted_id.as_str());
+
+    // 结果集按过滤后分页：--list-page 2 拿到第 2 页，且每页 1 条
+    let published_page = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-list",
+            "--status",
+            "published",
+            "--page-size",
+            "1",
+            "--list-page",
+            "2",
+        ])
+        .assert_json_ok();
+    assert_eq!(published_page["matched_total"], 2);
+    assert_eq!(published_page["subtitles"].as_array().unwrap().len(), 1);
+
+    let published_all = env
+        .run_bt(&[
+            "--json",
+            "video",
+            "subtitle-list",
+            "--status",
+            "published",
+            "--page-size",
+            "1",
+            "--list-page",
+            "3",
+        ])
+        .assert_json_ok();
+    assert!(published_all["subtitles"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn t5_c3_11_subtitle_upload_tolerates_transient_poll_errors() {
+    let server = MockBiliServer::start();
+    let env = TestEnv::new().with_server(&server).with_valid_cookies();
+    let srt = subtitle_srt_path(&env);
+
+    // 跳过提交前的落库基线扫描（第 1 次 author/list），让回查的第 1 次轮询返回 HTTP 500，
+    // 之后恢复正常：上传仍应判定为成功
+    server.set_transient_fault(
+        "/x/v2/dm/subtitle/search/author/list",
+        FaultConfig::http(500, "boom"),
+        1,
+    );
+
+    let out = env
+        .run_bt_env(
+            &[
+                "--json",
+                "video",
+                "subtitle-upload",
+                "BV1uJ411r7hL",
+                srt.to_str().unwrap(),
+                "--lang",
+                "zh",
+            ],
+            &[("BT_SUBTITLE_VERIFY_TIMEOUT_SECS", "20")],
+        )
+        .assert_json_ok();
+
+    assert_eq!(out["verified"], true);
+    assert_eq!(out["verified_status"], 5);
+    let polls = server
+        .requests()
+        .iter()
+        .filter(|r| r.path == "/x/v2/dm/subtitle/search/author/list")
+        .count();
+    assert!(polls >= 2, "expected a retry after the transient error");
 }
