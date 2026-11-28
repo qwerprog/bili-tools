@@ -20,7 +20,7 @@
 | `auth` | `login`, `status`, `logout`, `refresh`, `daily` |
 | `live` | `start`, `stop`, `status`, `info`, `title`, `area`, `following`, `stream`, `danmaku`, `chat`, `send`, `record` |
 | `search` | `video`, `user`, `live`, `hot` |
-| `video` | `info`, `streams`, `subtitle`, `subtitle-upload`, `subtitle-list`, `subtitle-delete`, `summary`, `tags`, `related`, `danmaku`, `comments [--compact\|-i\|--root\|--raw]`, `comment (post\|like\|delete)`, `like`, `coin`, `triple`, `download`, `upload`, `append`, `replace`, `studio (ls\|show)` |
+| `video` | `info`, `streams`, `subtitle`, `subtitle-upload`, `subtitle-list`, `subtitle-delete`, `summary`, `tags`, `related`, `danmaku`, `comments [--compact\|-i\|--root\|--raw]`, `comment (post\|like\|delete)`, `like`, `coin`, `triple`, `download`, `upload`, `append`, `replace`, `edit`, `topics`, `studio (ls\|show)` |
 | `user` | `info`, `videos`, `dynamics`, `follow`, `unfollow` |
 | `feed` | `bit feed [--type all\|video\|article] [--offset <CURSOR>]` |
 | `rank` | `video`, `popular` |
@@ -42,6 +42,7 @@
 - `--tid <TID>`: Bilibili partition ID (e.g., `171` 电子竞技, `17` 单机游戏, `122` 野生技术协会).
 - `--copyright <1|2>`: `1` original (default), `2` repost (requires `--source`).
 - `--cover <IMAGE>` / `--cover43 <IMAGE>`: 16:9 main cover and optional 4:3 feed cover (local `jpg`/`png`/`webp` path or remote `https` URL).
+- `--topic <NAME>` / `--topic-id <ID>` / `--mission-id <ID>`: bind official Bilibili campaign/activity tag (also supported in `video edit`; query available activities with `bit video topics`).
 
 ## Subtitle Track Options (`video subtitle-upload` / `subtitle-list` / `subtitle-delete`)
 
